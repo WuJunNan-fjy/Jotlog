@@ -1,0 +1,34 @@
+# ============================================================================
+# 本地开发配置【模板】
+#
+# 用法：
+#   1. 复制这个文件为同目录下的 application-local.yml
+#        cp config/application-local.yml.example config/application-local.yml
+#      （Windows PowerShell）
+#        Copy-Item config\application-local.yml.example config\application-local.yml
+#   2. 填入你自己的真实值
+#   3. application-local.yml 已被 .gitignore 忽略，不会进 Git
+#
+# 为什么要有两个文件：
+#   src/main/resources/application.yml 是仓库里的默认配置，只有占位符。
+#   application-local.yml 是本机真值，profile-specific 优先级更高，会覆盖它。
+#   这样仓库里永远没有密钥，你自己本机又能直接跑。
+#
+# ⚠️ 千万不要把填好的 application-local.yml 提交上去。
+# ============================================================================
+
+spring:
+  datasource:
+    # characterEncoding 只能写 UTF-8。写 utf8mb4 会抛
+    # "Unsupported character encoding 'utf8mb4'"（Java 里没有这个 charset 名）。
+    url: jdbc:mysql://YOUR_DB_HOST:3306/jotlog?characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&useSSL=false
+    username: YOUR_DB_USER
+    password: YOUR_DB_PASSWORD
+
+jotlog:
+  channel:
+    feishu:
+      # 凭证配好 + 飞书应用已发布后再改成 true
+      enabled: false
+      app-id: YOUR_FEISHU_APP_ID
+      app-secret: YOUR_FEISHU_APP_SECRET

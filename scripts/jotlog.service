@@ -1,0 +1,53 @@
+[Unit]
+Description=Jotlog - 随手记
+Documentation=https://github.com/your-name/jotlog
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jotlog
+Group=jotlog
+
+WorkingDirectory=/opt/jotlog
+ExecStart=/usr/bin/java -Xms128m -Xmx512m \
+  -XX:+UseG1GC \
+  -Dfile.encoding=UTF-8 \
+  -jar /opt/jotlog/jotlog.jar
+
+# Flyway 自动建表；不配也行，这里保持显式
+Environment=SPRING_PROFILES_ACTIVE=prod
+
+# ============ 密钥从这里注入，不要写进配置文件 ============
+# ⚠️ 你选择直接用 root 账号连MySQL。请注意：
+#   Jotlog 进程一旦被攻破，攻击者拿到的是整个 MySQL 实例的 root 权限。
+#   这是自用场景下的可接受取舍，但请确认：
+#     1. 这台MySQL 上没有其他业务库（否则一并失守）
+#     2. MySQL 只监听 127.0.0.1，不对外网开放
+#     3. root 密码不在版本库里（这个文件已在 .gitignore 的管理范围外）
+#
+# 想收紧时改用限定库权限的账号，见 scripts/init-db.sql 里的注释。
+Environment=FEISHU_APP_ID=cli_xxxxxxxxxxxxxxxx
+Environment=FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx
+Environment=JOTLOG_DB_USER=root
+Environment=JOTLOG_DB_PASSWORD=改成你自己的密码
+Environment=JOTLOG_DB_HOST=127.0.0.1
+Environment=JOTLOG_ATTACHMENT_DIR=/var/lib/jotlog/attachments
+
+# 日志走 journald，用 journalctl -u jotlog -f 查看
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=jotlog
+
+Restart=always
+RestartSec=5
+
+# ============ 安全加固 ============
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/jotlog
+
+[Install]
+WantedBy=multi-user.target

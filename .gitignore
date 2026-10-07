@@ -1,0 +1,48 @@
+# ---- 构建产物 ----
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+!**/maven-wrapper.jar
+
+# ---- 数据与附件 ----
+data/
+attachments/
+*.db
+*.db-shm
+*.db-wal
+
+# ---- 密钥：绝对不能进Git ----
+#
+# 真值配置放 config/application-local.yml，仓库里只提交
+# config/application-local.yml.example（模板，全是 YOUR_XXX 占位符）。
+application-local.yml
+application-local.yaml
+config.local.toml
+config.toml
+*.secret
+.env
+.env.*
+!.env.example
+!config/application-local.yml.example
+
+# ---- WorkBuddy 工作记忆 ----
+# 是 AI 会话的内部笔记，不是项目源码，不提交。
+# 里面的项目决策已沉淀到 docs/Jotlog-技术选型.md。
+.workbuddy/
+
+# ---- IDE ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+
+# ---- 系统文件 ----
+.DS_Store
+Thumbs.db
+*.log
