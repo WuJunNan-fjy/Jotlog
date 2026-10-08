@@ -12,6 +12,11 @@ attachments/
 *.db-shm
 *.db-wal
 
+# ---- 前端 ----
+web/node_modules/
+web/dist/
+# 图标是脚本生成的，但产物要提交（PWA 需要），所以不忽略 public/*.png
+
 # ---- 密钥：绝对不能进Git ----
 #
 # 真值配置放 config/application-local.yml，仓库里只提交

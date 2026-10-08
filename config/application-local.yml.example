@@ -25,10 +25,80 @@ spring:
     username: YOUR_DB_USER
     password: YOUR_DB_PASSWORD
 
+  # 登录验证码走 SMTP。密码要填「授权码」不是邮箱登录密码。
+  #
+  # 端口只能二选一，配错了表现为「连上了但握手失败」：
+  #   587 + STARTTLS（默认，推荐）
+  #   465 + 隐式 SSL（需要同时把 JOTLOG_MAIL_STARTTLS=false、JOTLOG_MAIL_SSL=true）
+  #
+  # 常见服务商：
+  #   QQ 邮箱   smtp.qq.com      587（或 465，见上）
+  #   163 邮箱  smtp.163.com     465（记得同时关 STARTTLS、开 SSL）
+  #   Gmail     smtp.gmail.com   587（密码用 App Password，不是账号密码）
+  mail:
+    host: smtp.qq.com
+    port: 587
+    username: YOUR_EMAIL@qq.com
+    password: YOUR_SMTP_AUTH_CODE
+    # starttls / ssl 一般不用写，默认 starttls=true 对应 587。
+    # 只有换到 465 才需要改，见上面的说明。
+
 jotlog:
+  # ---------- 登录账号 ----------
+  # 首次启动会用这三个值建出唯一的用户。建好之后 password 就失效了，
+  # 之后改密码走数据库（设置页），配置文件里不再有明文密码。
+  auth:
+    username: admin
+    email: YOUR_EMAIL@qq.com
+    password: YOUR_INITIAL_PASSWORD
+    # 想让登录态跨重启存活就填一个至少 32 字符的固定串。
+    # 留空则每次启动随机生成（重启后所有人要重新登录）。
+    jwt-secret: YOUR_RANDOM_STRING_AT_LEAST_32_CHARS
+  mail:
+    # 留空则回落到 spring.mail.username
+    from: YOUR_EMAIL@qq.com
+
   channel:
     feishu:
       # 凭证配好 + 飞书应用已发布后再改成 true
       enabled: false
       app-id: YOUR_FEISHU_APP_ID
       app-secret: YOUR_FEISHU_APP_SECRET
+      mention-only: true
+      receipt-text: "已记下，稍后补全"
+
+# ============================================================================
+# 附：服务器部署用的环境变量对照表
+#
+# 上面每一个值都可以用环境变量替代（本地开发不用，直接改这个文件就行）。
+# Spring 会把 JOTLOG_AUTH_PASSWORD 自动映射到 jotlog.auth.password，
+# 所以环境变量名 = 配置项全大写 + 点换下划线。
+#
+#   JOTLOG_PROFILE          激活哪个 profile，填 prod
+#   JOTLOG_DB_HOST          数据库地址
+#   JOTLOG_DB_PORT          数据库端口，默认 3306
+#   JOTLOG_DB_USER          数据库用户
+#   JOTLOG_DB_PASSWORD      数据库密码
+#   JOTLOG_MAIL_HOST        SMTP 主机，如 smtp.qq.com
+#   JOTLOG_MAIL_PORT        587（STARTTLS）/ 465（SSL），默认 587
+#   JOTLOG_MAIL_USERNAME    发信账号
+#   JOTLOG_MAIL_PASSWORD    授权码，不是邮箱登录密码
+#   JOTLOG_MAIL_FROM        发件地址，留空回落到 username
+#   JOTLOG_MAIL_STARTTLS    true（配 587）/ false（配 465）
+#   JOTLOG_MAIL_SSL         false（配 587）/ true（配 465）
+#   JOTLOG_AUTH_USERNAME    初始用户名，默认 admin
+#   JOTLOG_AUTH_EMAIL       初始邮箱，验证码发到这
+#   JOTLOG_AUTH_PASSWORD    初始密码，只在首次启动建号时用一次
+#   JOTLOG_JWT_SECRET       ≥32 字符。留空则每次启动随机生成，重启后要重新登录
+#   JOTLOG_DEV_CODE_TO_LOG  仅开发：true 时验证码只写日志不发信。生产必须 false
+#   JOTLOG_ATTACHMENT_DIR   附件目录，默认 ./data/attachments
+#   FEISHU_ENABLED          是否连飞书，默认 false
+#   FEISHU_APP_ID           飞书 App ID
+#   FEISHU_APP_SECRET       飞书 App Secret
+#
+# 生成 JWT 密钥：
+#   openssl rand -base64 48
+#
+# 用 465 端口时的完整改法（三个变量要一起改，只改端口会握手失败）：
+#   JOTLOG_MAIL_PORT=465 JOTLOG_MAIL_STARTTLS=false JOTLOG_MAIL_SSL=true
+# ============================================================================

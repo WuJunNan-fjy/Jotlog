@@ -34,6 +34,29 @@ public interface EntryRepository {
     /** 待润色队列：状态为 pending 且超过指定时间。 */
     List<Long> pendingForPolish(int limit);
 
+    /**
+     * 分页查询。 keyword 为空时就是"按时间倒序翻页"。
+     *
+     * @param includeArchived true 时只看归档箱，false 时只看正常条目
+     */
+    Page searchPage(String keyword, String type, Boolean starred, boolean includeArchived,
+                    int limit, long offset);
+
+    /** 改星标 / 归档 / 备注。三个都传 null 表示什么都不改。 */
+    void updateFlags(long id, Boolean starred, Boolean archived, String note);
+
+    /** 物理删除。附件走外键级联。 */
+    void deleteById(long id);
+
+    /** 首页顶部那几个数字。 */
+    Stats stats();
+
+    record Stats(long total, long today, long week, long starred, long archived, long pendingAi) {
+    }
+
+    record Page(List<Row> items, long total) {
+    }
+
     record NewEntry(
             String source,
             String sourceMsgId,
@@ -48,6 +71,12 @@ public interface EntryRepository {
     ) {
     }
 
+    /**
+     * 返回给前端的行。
+     *
+     * 带 starred / archived 是为了让列表能显示当前状态 ——
+     * 否则前端在"全部"列表里根本不知道哪条加了星标。
+     */
     record Row(
             long id,
             String source,
@@ -59,7 +88,9 @@ public interface EntryRepository {
             String aiSummary,
             String aiTags,
             String aiStatus,
-            String createdAt
+            String createdAt,
+            boolean starred,
+            boolean archived
     ) {
     }
 }

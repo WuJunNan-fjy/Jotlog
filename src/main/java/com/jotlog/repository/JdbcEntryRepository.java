@@ -1,17 +1,23 @@
 package com.jotlog.repository;
 
-import com.jotlog.core.Extractor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.List;
 
 @Repository
 public class JdbcEntryRepository implements EntryRepository {
+
+    /** 所有查询共用同一组列，避免各处手写漏列。 */
+    private static final String COLUMNS = """
+            id, source, entry_type, raw_input, url, domain,
+            title, ai_summary, ai_tags, ai_status, created_at,
+            starred, archived
+            """;
 
     private final JdbcTemplate jdbc;
 
@@ -44,62 +50,36 @@ public class JdbcEntryRepository implements EntryRepository {
 
     @Override
     public List<Row> recent(int limit) {
-        return jdbc.query("""
-                SELECT id, source, entry_type, raw_input, url, domain,
-                       title, ai_summary, ai_tags, ai_status, created_at
-                FROM entries
-                WHERE archived = 0
-                ORDER BY created_at DESC
-                LIMIT ?
-                """, ROW, limit);
+        return searchPage(null, null, null, false, limit, 0).items();
     }
 
     @Override
     public Row findById(long id) {
-        List<Row> rows = jdbc.query("""
-                SELECT id, source, entry_type, raw_input, url, domain,
-                       title, ai_summary, ai_tags, ai_status, created_at
-                FROM entries
-                WHERE id = ?
-                """, ROW, id);
+        List<Row> rows = jdbc.query("SELECT " + COLUMNS + " FROM entries WHERE id = ?", ROW, id);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    /**
-     * 全文检索。
-     *
-     * ngram_token_size 默认 2，两个及以上汉字走 FULLTEXT。
-     * 单字查询 ngram 命中不了，降级到 LIKE —— 语法上 5.7+ 都成立，
-     * 不像 trigram 那样静默返回空结果。
-     */
     @Override
     public List<Row> search(String keyword, int limit) {
+        return searchPage(keyword, null, null, false, limit, 0).items();
+    }
+
+    /**
+     * 分页查询。
+     *
+     * 三种检索模式：
+     *   none  —— 没关键词，纯按时间翻页
+     *   match —— 两个字及以上，走 ngram 全文索引
+     *   like  —— 一个字（ngram_token_size=2 命中不了），或全文查不到时的兜底
+     */
+    @Override
+    public Page searchPage(String keyword, String type, Boolean starred, boolean includeArchived,
+                           int limit, long offset) {
         String kw = keyword == null ? "" : keyword.trim();
-        if (kw.isEmpty()) {
-            return recent(limit);
-        }
-        // 单字走不了 ngram 索引（ngram_token_size=2），直接 LIKE
-        if (kw.length() < 2) {
-            return likeSearch(kw, limit);
-        }
-        // MATCH 的列必须与 ft_search 索引定义完全一致且同序，否则报 1191。
-        // 索引定义在 V1__init.sql：FULLTEXT KEY ft_search (raw_input, title, ai_summary)
-        //
-        // 用 BOOLEAN MODE 而不是 NATURAL LANGUAGE MODE，这是踩过坑的：
-        //   NATURAL 会把「出现在超过 50% 行里」的 token 当停用词丢掉。
-        //   配 ngram 分词器（按 2 字滑窗切）后，中文常用字组合极易触发这个阈值，
-        //   实测数据量小时搜「沿途」score 直接为 0 —— 搜索静默失效，用户毫无感知。
-        //   BOOLEAN 不做阈值过滤，行为确定，代价是没有相关度排序。
-        //   对随手记这种「命中即有用」的场景，排序价值远低于「不能漏」。
-        List<Row> rows = jdbc.query("""
-                SELECT id, source, entry_type, raw_input, url, domain,
-                       title, ai_summary, ai_tags, ai_status, created_at
-                FROM entries
-                WHERE MATCH(raw_input, title, ai_summary) AGAINST (? IN BOOLEAN MODE)
-                  AND archived = 0
-                ORDER BY created_at DESC
-                LIMIT ?
-                """, ROW, booleanQuery(kw), limit);
+        String mode = kw.isEmpty() ? "none" : (kw.length() < 2 ? "like" : "match");
+
+        List<Row> items = query(mode, kw, type, starred, includeArchived, limit, offset);
+        long total = count(mode, kw, type, starred, includeArchived);
 
         // 兜底：全文索引查不到时用 LIKE 再查一遍。
         //
@@ -108,22 +88,70 @@ public class JdbcEntryRepository implements EntryRepository {
         // 实测「Java」被切成 Ja/av/va，三个 bigram 全含 a 全被丢，搜出来 0 条。
         // 解法是 SET GLOBAL innodb_ft_enable_stopword=0（见 scripts/init-db.sql），
         // 但那是全局变量，MySQL 重启就失效。兜底保证即使配置丢了也只是变慢，不会搜不到。
-        if (rows.isEmpty()) {
-            return likeSearch(kw, limit);
+        if (items.isEmpty() && "match".equals(mode)) {
+            items = query("like", kw, type, starred, includeArchived, limit, offset);
+            total = count("like", kw, type, starred, includeArchived);
         }
-        return rows;
+
+        return new Page(items, total);
     }
 
-    private List<Row> likeSearch(String kw, int limit) {
-        return jdbc.query("""
-                SELECT id, source, entry_type, raw_input, url, domain,
-                       title, ai_summary, ai_tags, ai_status, created_at
-                FROM entries
-                WHERE archived = 0
-                  AND (raw_input LIKE ? OR title LIKE ? OR ai_summary LIKE ?)
-                ORDER BY created_at DESC
-                LIMIT ?
-                """, ROW, "%" + kw + "%", "%" + kw + "%", "%" + kw + "%", limit);
+    private List<Row> query(String mode, String kw, String type, Boolean starred,
+                            boolean archived, int limit, long offset) {
+        StringBuilder sql = new StringBuilder("SELECT ").append(COLUMNS).append(" FROM entries WHERE ");
+        List<Object> params = new ArrayList<>();
+        conditions(sql, params, mode, kw, type, starred, archived);
+        sql.append(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
+        params.add(limit);
+        params.add(offset);
+        return jdbc.query(sql.toString(), ROW, params.toArray());
+    }
+
+    private long count(String mode, String kw, String type, Boolean starred, boolean archived) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM entries WHERE ");
+        List<Object> params = new ArrayList<>();
+        conditions(sql, params, mode, kw, type, starred, archived);
+        Long n = jdbc.queryForObject(sql.toString(), Long.class, params.toArray());
+        return n == null ? 0 : n;
+    }
+
+    /**
+     * 拼 WHERE 条件。
+     *
+     * MATCH 的列必须与 ft_search 索引定义完全一致且同序，否则报 1191。
+     * 索引定义在 V1__init.sql：FULLTEXT KEY ft_search (raw_input, title, ai_summary)
+     *
+     * 用 BOOLEAN MODE 而不是 NATURAL LANGUAGE MODE，这是踩过坑的：
+     *   NATURAL 会把「出现在超过 50% 行里」的 token 当停用词丢掉。
+     *   配 ngram 分词器（按 2 字滑窗切）后，中文常用字组合极易触发这个阈值，
+     *   实测数据量小时搜「沿途」score 直接为 0 —— 搜索静默失效，用户毫无感知。
+     *   BOOLEAN 不做阈值过滤，行为确定，代价是没有相关度排序。
+     *   对随手记这种「命中即有用」的场景，排序价值远低于「不能漏」。
+     */
+    private static void conditions(StringBuilder sql, List<Object> params, String mode, String kw,
+                                   String type, Boolean starred, boolean archived) {
+        sql.append("archived = ?");
+        params.add(archived ? 1 : 0);
+
+        if ("match".equals(mode)) {
+            sql.append(" AND MATCH(raw_input, title, ai_summary) AGAINST (? IN BOOLEAN MODE)");
+            params.add(booleanQuery(kw));
+        } else if ("like".equals(mode)) {
+            sql.append(" AND (raw_input LIKE ? OR title LIKE ? OR ai_summary LIKE ?)");
+            String like = "%" + kw + "%";
+            params.add(like);
+            params.add(like);
+            params.add(like);
+        }
+
+        if (type != null && !type.isBlank()) {
+            sql.append(" AND entry_type = ?");
+            params.add(type.trim().toLowerCase());
+        }
+        if (starred != null) {
+            sql.append(" AND starred = ?");
+            params.add(starred ? 1 : 0);
+        }
     }
 
     /**
@@ -147,6 +175,64 @@ public class JdbcEntryRepository implements EntryRepository {
         }
         // 整串都是标点时兜底，避免拼出空查询串导致 MATCH 语法错。
         return sb.isEmpty() ? "\"\"" : sb.toString();
+    }
+
+    /**
+     * 改星标 / 归档 / 备注。
+     *
+     * 只改这三个字段。这里永远不出现 raw_input —— 那是用户原话。
+     */
+    @Override
+    public void updateFlags(long id, Boolean starred, Boolean archived, String note) {
+        StringBuilder sql = new StringBuilder("UPDATE entries SET updated_at = NOW(3)");
+        List<Object> params = new ArrayList<>();
+        if (starred != null) {
+            sql.append(", starred = ?");
+            params.add(starred ? 1 : 0);
+        }
+        if (archived != null) {
+            sql.append(", archived = ?");
+            params.add(archived ? 1 : 0);
+        }
+        if (note != null) {
+            sql.append(", note = ?");
+            params.add(note);
+        }
+        sql.append(" WHERE id = ?");
+        params.add(id);
+        jdbc.update(sql.toString(), params.toArray());
+    }
+
+    /**
+     * 物理删除。
+     *
+     * 不做软删，是因为"归档"已经是软删了。再藏一层 deleted_at
+     * 只会让每个查询多一个条件，而用户删掉就是想删掉。
+     * 附件靠外键 ON DELETE CASCADE 一起带走。
+     */
+    @Override
+    public void deleteById(long id) {
+        jdbc.update("DELETE FROM entries WHERE id = ?", id);
+    }
+
+    @Override
+    public Stats stats() {
+        return jdbc.queryForObject("""
+                SELECT
+                    (SELECT COUNT(*) FROM entries WHERE archived = 0)                             AS total,
+                    (SELECT COUNT(*) FROM entries WHERE archived = 0 AND created_at >= CURDATE())  AS today,
+                    (SELECT COUNT(*) FROM entries WHERE archived = 0
+                       AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY))                      AS week,
+                    (SELECT COUNT(*) FROM entries WHERE archived = 0 AND starred = 1)              AS starred,
+                    (SELECT COUNT(*) FROM entries WHERE archived = 1)                              AS archived,
+                    (SELECT COUNT(*) FROM entries WHERE ai_status = 'pending')                     AS pending_ai
+                """, (ResultSet rs, int i) -> new Stats(
+                rs.getLong("total"),
+                rs.getLong("today"),
+                rs.getLong("week"),
+                rs.getLong("starred"),
+                rs.getLong("archived"),
+                rs.getLong("pending_ai")));
     }
 
     /**
@@ -199,5 +285,7 @@ public class JdbcEntryRepository implements EntryRepository {
             rs.getString("ai_status"),
             rs.getTimestamp("created_at") == null
                     ? null
-                    : rs.getTimestamp("created_at").toLocalDateTime().toString());
+                    : rs.getTimestamp("created_at").toLocalDateTime().toString(),
+            rs.getBoolean("starred"),
+            rs.getBoolean("archived"));
 }

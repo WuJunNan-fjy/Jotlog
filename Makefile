@@ -6,8 +6,14 @@
 # ============================================================
 
 MVN      := mvn
-JAR     := target/jotlog.jar
-PROFILE := local
+JAR      := target/jotlog.jar
+PROFILE  := local
+WEB      := web
+# npm 必须跑在 Node 20+ 上（Vite 6 / Tailwind 4 的硬性要求）。
+# 默认 node 版本太低时用 NODE_HOME 指过去：
+#   make web-build NODE_HOME="C:/Users/you/.workbuddy/binaries/node/versions/22.22.2-6"
+NODE_BIN := $(if $(NODE_HOME),$(NODE_HOME)/,)
+NPM      := $(NODE_BIN)npm
 
 .DEFAULT_GOAL := help
 
@@ -28,12 +34,16 @@ test: ## 跑单元测试
 	$(MVN) -B test
 
 .PHONY: package
-package: ## 打包成可执行 jar
+package: ## 打包成可执行 jar（不含前端，web/dist 存在时会被自动打进去）
 	$(MVN) -B clean package -DskipTests
 	@echo "产物：$(JAR)"
 
+.PHONY: dist
+dist: web-build package ## 前端 + 后端，产出带界面的完整 jar
+	@echo "产物：$(JAR)（已包含 web/dist 的前端）"
+
 .PHONY: run
-run: ## 本地启动
+run: ## 本地启动（后端 8080；前端另开 make web-dev）
 	$(MVN) spring-boot:run
 
 .PHONY: verify
@@ -53,6 +63,20 @@ db-check: ## 检查 ngram 全文索引是否正常
 	SELECT VERSION() AS mysql_version, \
 	       @@ngram_token_size AS ngram_token_size, \
 	       @@character_set_server AS charset;"
+
+# ---------- 前端 ----------
+
+.PHONY: web-install
+web-install: ## 安装前端依赖
+	cd $(WEB) && $(NPM) install
+
+.PHONY: web-dev
+web-dev: ## 前端开发服务器（5173），/api 代理到本机 8080
+	cd $(WEB) && $(NPM) run dev
+
+.PHONY: web-build
+web-build: ## 构建前端到 web/dist
+	cd $(WEB) && $(NPM) run build
 
 # ---------- 部署 ----------
 

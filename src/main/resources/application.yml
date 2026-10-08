@@ -35,12 +35,59 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+  # 登录验证码走 SMTP。没配 host 时 JavaMailSender 仍然会被创建，
+  # 但发信必失败，EmailService 会按"未配置"处理并给出明确提示。
+  mail:
+    host: ${JOTLOG_MAIL_HOST:}
+    port: ${JOTLOG_MAIL_PORT:587}
+    username: ${JOTLOG_MAIL_USERNAME:}
+    password: ${JOTLOG_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          # 587 = STARTTLS（先明文握手再升级）；465 = 隐式 SSL（一上来就 TLS）。
+          # 两个只能开一个。默认按 587 配，用 465 时把 starttls 关掉、ssl 打开：
+          #   JOTLOG_MAIL_PORT=465 JOTLOG_MAIL_STARTTLS=false JOTLOG_MAIL_SSL=true
+          # 否则会出现「连上了但握手失败」这类难查的报错。
+          starttls:
+            enable: ${JOTLOG_MAIL_STARTTLS:true}
+          ssl:
+            enable: ${JOTLOG_MAIL_SSL:false}
+          # 连接超时写短一点，SMTP 连不上时不至于把登录请求卡死
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
   jackson:
     default-property-inclusion: non_null
     serialization:
       write-dates-as-timestamps: false
 
 jotlog:
+  # ---------- 鉴权 ----------
+  # 单用户自托管：没有注册入口，初始账号由下面的配置在首次启动时建出来。
+  # 建好之后 password 就不再生效了，之后改密码走数据库（设置页）。
+  auth:
+    username: ${JOTLOG_AUTH_USERNAME:admin}
+    email: ${JOTLOG_AUTH_EMAIL:}
+    password: ${JOTLOG_AUTH_PASSWORD:}
+    # 留空则启动时随机生成，代价是重启后所有人要重新登录
+    jwt-secret: ${JOTLOG_JWT_SECRET:}
+    jwt-ttl-hours: 168
+    code-ttl-minutes: 5
+    code-cooldown-seconds: 60
+    max-attempts: 5
+    lock-minutes: 30
+    bootstrap: true
+    # 开发用：没配 SMTP 时把验证码只写日志，不真的发信。生产必须 false。
+    dev-code-to-log: ${JOTLOG_DEV_CODE_TO_LOG:false}
+
+  mail:
+    # 留空则回落到 spring.mail.username
+    from: ${JOTLOG_MAIL_FROM:}
+    personal: Jotlog
+
   channel:
     feishu:
       # 改成 true 才会连飞书。没配凭证时保持 false，应用仍能正常启动。

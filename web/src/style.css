@@ -1,0 +1,184 @@
+@import 'tailwindcss';
+
+/* ============================================================
+   设计 token
+   纸感编辑风：暖白纸底 + 墨色文字 + 衬线体日期。
+   刻意避开通用 SaaS 审美（蓝紫渐变、纯白卡片套卡片、全圆角），
+   因为这是一个"给自己看的本子"，不是给老板看的仪表盘。
+   ============================================================ */
+@theme {
+  --color-paper: #fbfaf7;
+  --color-paper-deep: #f4f2ec;
+  --color-ink: #1b1a17;
+  --color-ink-2: #57534c;
+  --color-ink-3: #8c8880;
+  --color-line: #e4e1d9;
+  --color-line-soft: #eeebe3;
+  --color-accent: #1f4f46;
+  --color-accent-soft: #e7efec;
+  --color-brass: #8a5a1b;
+  --color-brass-soft: #f7efe2;
+  --color-danger: #9b2c2c;
+
+  --font-sans: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', system-ui, -apple-system,
+    'Segoe UI', sans-serif;
+  --font-serif: 'Songti SC', 'Source Han Serif SC', 'Noto Serif CJK SC', Georgia, 'Times New Roman',
+    serif;
+  --font-mono: 'SFMono-Regular', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* 中文界面下字体渲染略细一点更耐看 */
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.75;
+  }
+
+  /* 键盘可达性：焦点环要看得见，但不要用浏览器默认那圈突兀的蓝 */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-accent-soft);
+  }
+}
+
+@layer components {
+  /* 输入框：不用大圆角卡片，用下划线 + 极浅底，像在本子上写字 */
+  .field {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--color-ink);
+    font-size: 15px;
+    transition:
+      border-color 0.18s cubic-bezier(0.25, 1, 0.5, 1),
+      box-shadow 0.18s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .field:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
+  }
+
+  .field::placeholder {
+    color: var(--color-ink-3);
+  }
+
+  /* 主按钮：墨绿实心，无渐变无阴影 */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 6px;
+    background: var(--color-accent);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background 0.18s cubic-bezier(0.25, 1, 0.5, 1),
+      transform 0.18s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: #173f38;
+  }
+
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* 次要按钮：描边，用于"发送验证码"这类动作 */
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--color-ink-2);
+    font-size: 14px;
+    cursor: pointer;
+    transition:
+      border-color 0.18s cubic-bezier(0.25, 1, 0.5, 1),
+      color 0.18s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .btn-ghost:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* 日期分隔：衬线体 + 大字距，像笔记本上的日期栏 */
+  .date-rule {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-3);
+  }
+
+  /* 正文内容：保留用户换行，行高放宽 */
+  .prose-entry {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.8;
+  }
+
+  /* iOS 安全区：底部 tab bar 在全面屏手机上不要被home 条压住 */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+@layer utilities {
+  /* 进入动画：短、缓出，不做弹跳 */
+  .fade-up {
+    animation: fade-up 0.28s cubic-bezier(0.25, 1, 0.5, 1) both;
+  }
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fade-up {
+      animation: none;
+    }
+  }
+}
