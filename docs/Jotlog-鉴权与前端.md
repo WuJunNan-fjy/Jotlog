@@ -91,9 +91,12 @@ JWT 是无状态的，签出去就收不回来。如果只靠 JWT，点"退出�
 
 ## 五、前端结构
 
+> 界面部分（三档响应式布局、设计 token、深色模式、组件职责）单独写在
+> **[前端界面设计](Jotlog-前端界面设计.md)**，这里只列文件树和几条跨领域的底线。
+
 ```
 web/
-├── index.html
+├── index.html              # 含防闪烁的主题初始化内联脚本
 ├── public/                 # 直接拷进 dist，PWA 资产在这
 │   ├── manifest.webmanifest
 │   ├── sw.js
@@ -101,27 +104,27 @@ web/
 ├── scripts/gen-icons.py    # 图标生成（需要 Pillow）
 └── src/
     ├── api/http.ts         # fetch 封装：token、401 统一处理、错误归一
-    ├── stores/auth.ts      # 登录态（pinia）
+    ├── stores/             # auth（登录态）/ ui（选中、弹层）/ stats（那排数字）
+    ├── composables/        # useTheme / useBreakpoint / useToast / useHotkeys / useEntryOps
     ├── router/index.ts     # 路由 + 登录守卫
     ├── components/
-    │   ├── AppShell.vue    # 顶栏 + 移动端底部 tab
-    │   ├── ComposeBox.vue  # "记一笔"输入框
-    │   ├── EntryCard.vue   # 单条记录
-    │   └── Icon.vue        # 十来个手写 SVG 图标
-    ├── views/
-    │   ├── LoginView.vue
-    │   ├── TimelineView.vue  # 复用为 全部 / 星标 / 归档
-    │   ├── SearchView.vue
-    │   └── SettingsView.vue
-    ├── utils/format.ts     # 日期分组（今天/昨天/10月8日 周三）
-    └── style.css           # 设计 token + 基础组件类
+    │   ├── AppShell.vue        # 三档布局骨架
+    │   ├── SideNav.vue         # 侧栏（窄轨 / 完整两档合一）
+    │   ├── MobileTopBar.vue / MobileTabBar.vue
+    │   ├── EntryCard.vue       # 列表里的一条
+    │   ├── EntryDetailPanel.vue / EntryDetailOverlay.vue
+    │   ├── ComposeBox.vue / ComposeSheet.vue
+    │   └── TypeBadge / EmptyState / SkeletonList / ToastHost / UserMenu / Icon
+    ├── views/              # Login / Timeline（复用为 全部·星标·归档）/ Search / Settings
+    ├── utils/              # format（日期）/ entryMeta（类型配色）/ highlight（搜索高亮）
+    └── style.css           # 设计 token + 组件类，两套色板只在这里定义
 ```
 
-几个设计取舍：
+几条跨领域的底线：
 
-- **token 存 localStorage。** 前后端分离 + Bearer JWT 下这是最简单可靠的做法。代价是 XSS 能读到 token，所以任何地方都**不要**用 `v-html` 渲染用户输入的内容。
-- **移动端优先。** 手机是随手记的主入口，所以底部 tab 用 `fixed` + `safe-area-inset`，拇指够得着。桌面端换成顶部导航。
-- **图标手写，不引图标库。** 一共十来个图标，为它拉一个依赖不划算。
+- **token 存 localStorage。** 前后端分离 + Bearer JWT 下这是最简单可靠的做法。代价是 XSS 能读到 token，所以任何地方都**不要**用 `v-html` 渲染用户输入的内容 —— 搜索结果的高亮也因此走分段渲染而不是拼 HTML。
+- **手机和电脑同一套代码。** 不做 m.xxx.com，不做 UA 判断。三档布局靠 CSS 断点 + 两个 `matchMedia` 完成。
+- **图标手写，不引图标库。** 一共二十来个，笔画粗细和圆角都对着中文字重调过，换成通用库反而和文字打架。
 - **日期分组在时间线里是必需的。** 没有日期分隔的流水账根本没法回溯。
 
 ---

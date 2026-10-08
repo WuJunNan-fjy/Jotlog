@@ -6,6 +6,9 @@ import { useAuthStore } from '../stores/auth'
  *
  * /login 是唯一公开页，其余全部嵌在 AppShell 里（带导航和输入框）。
  * 用 history 模式而不是 hash：URL 干净，刷新时靠后端 SPA 兜底转发到 index.html。
+ *
+ * 不做滚动行为配置：滚动条在 AppShell 的内容列上，不在 window 上，
+ * router 的 scrollBehavior 管不到它，由 AppShell 自己处理。
  */
 const router = createRouter({
   history: createWebHistory(),
@@ -14,27 +17,44 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('../views/LoginView.vue'),
-      meta: { public: true },
+      meta: { public: true, title: '登录' },
     },
     {
       path: '/',
       component: () => import('../components/AppShell.vue'),
       children: [
-        { path: '', name: 'timeline', component: () => import('../views/TimelineView.vue') },
+        {
+          path: '',
+          name: 'timeline',
+          component: () => import('../views/TimelineView.vue'),
+          meta: { title: '时间线' },
+        },
         {
           path: 'starred',
           name: 'starred',
           component: () => import('../views/TimelineView.vue'),
           props: { mode: 'starred' },
+          meta: { title: '星标' },
         },
         {
           path: 'archive',
           name: 'archive',
           component: () => import('../views/TimelineView.vue'),
           props: { mode: 'archive' },
+          meta: { title: '归档' },
         },
-        { path: 'search', name: 'search', component: () => import('../views/SearchView.vue') },
-        { path: 'settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
+        {
+          path: 'search',
+          name: 'search',
+          component: () => import('../views/SearchView.vue'),
+          meta: { title: '搜索' },
+        },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: () => import('../views/SettingsView.vue'),
+          meta: { title: '设置' },
+        },
       ],
     },
     // 兜底：未知路径回到时间线，而不是空白页
@@ -53,6 +73,11 @@ router.beforeEach(async (to) => {
     return { path: '/' }
   }
   return true
+})
+
+router.afterEach((to) => {
+  const title = typeof to.meta.title === 'string' ? to.meta.title : ''
+  document.title = title ? `${title} · Jotlog` : 'Jotlog · 随手记'
 })
 
 export default router

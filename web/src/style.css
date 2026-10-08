@@ -1,69 +1,254 @@
 @import 'tailwindcss';
 
+/* 深色模式用 class 策略而不是 prefers-color-scheme：
+   用户要能在设置里选「跟随系统 / 浅色 / 深色」，选择存 localStorage。
+   只靠媒体查询就做不出「我就要浅色，系统爱怎么设怎么设」。 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ============================================================
    设计 token
-   纸感编辑风：暖白纸底 + 墨色文字 + 衬线体日期。
-   刻意避开通用 SaaS 审美（蓝紫渐变、纯白卡片套卡片、全圆角），
-   因为这是一个"给自己看的本子"，不是给老板看的仪表盘。
-   ============================================================ */
-@theme {
-  --color-paper: #fbfaf7;
-  --color-paper-deep: #f4f2ec;
-  --color-ink: #1b1a17;
-  --color-ink-2: #57534c;
-  --color-ink-3: #8c8880;
-  --color-line: #e4e1d9;
-  --color-line-soft: #eeebe3;
-  --color-accent: #1f4f46;
-  --color-accent-soft: #e7efec;
-  --color-brass: #8a5a1b;
-  --color-brass-soft: #f7efe2;
-  --color-danger: #9b2c2c;
 
-  --font-sans: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', system-ui, -apple-system,
+   纸感编辑风：暖白纸底 + 墨色文字 + 衬线体日期。
+   刻意避开通用 SaaS 审美（蓝紫渐变、纯白套娃卡片、全圆角 + 大投影），
+   因为这是「给自己看的本子」，不是给老板看的仪表盘。
+
+   两套色板只在这里定义一次，组件全部通过语义变量取色。
+   新增组件时不要写死 #xxx —— 那会在加深色模式时炸掉。
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* 底：纸。三层，越靠前越"近" */
+  --j-paper: #fbfaf7;
+  --j-paper-sunken: #f5f3ed;
+  --j-surface: #ffffff;
+  --j-surface-hover: #f7f5ef;
+
+  /* 墨：字。ink 最深，ink-4 只用于占位符和禁用态 */
+  --j-ink: #1a1917;
+  --j-ink-2: #57534c;
+  --j-ink-3: #857f76;
+  --j-ink-4: #a8a29a;
+
+  /* 线：分隔。line 是"看得见的分界"，line-soft 是"同组内的弱分界" */
+  --j-line: #e5e1d8;
+  --j-line-soft: #eeebe3;
+
+  /* 强调：墨绿。全站只有这一个主色，不搞渐变 */
+  --j-accent: #1f4f46;
+  --j-accent-hover: #173f38;
+  --j-accent-soft: #e6eeeb;
+  --j-accent-ring: rgba(31, 79, 70, 0.16);
+
+  /* 次强调：铜色。给星标用——星标是"我特别标出来的"，不该和主色抢 */
+  --j-brass: #8a5a1b;
+  --j-brass-soft: #f6eedf;
+
+  --j-danger: #9b2c2c;
+  --j-danger-soft: #f7e9e9;
+
+  --j-shadow-sm: 0 1px 2px rgba(26, 25, 23, 0.05);
+  --j-shadow-md: 0 4px 16px -4px rgba(26, 25, 23, 0.1);
+  --j-shadow-lg: 0 16px 48px -12px rgba(26, 25, 23, 0.2);
+
+  --j-font-sans: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', system-ui, -apple-system,
     'Segoe UI', sans-serif;
-  --font-serif: 'Songti SC', 'Source Han Serif SC', 'Noto Serif CJK SC', Georgia, 'Times New Roman',
-    serif;
-  --font-mono: 'SFMono-Regular', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  --j-font-serif: 'Songti SC', 'Source Han Serif SC', 'Noto Serif CJK SC', Georgia,
+    'Times New Roman', serif;
+  --j-font-mono: 'SFMono-Regular', 'JetBrains Mono', Consolas, 'Courier New', monospace;
 }
 
+.dark {
+  color-scheme: dark;
+
+  /* 深色不是把浅色反过来。纸在暗处是"墨纸"—— 偏暖的黑褐，不是纯灰。
+     纯 #000 配暖白文字会显得像终端，不是本子。 */
+  --j-paper: #131311;
+  --j-paper-sunken: #0e0e0d;
+  --j-surface: #1c1b19;
+  --j-surface-hover: #232220;
+
+  --j-ink: #edeae3;
+  --j-ink-2: #b5afa5;
+  --j-ink-3: #8b857c;
+  --j-ink-4: #6a655e;
+
+  --j-line: #322f2b;
+  --j-line-soft: #26251f;
+
+  /* 深色下墨绿几乎看不见，得提亮。不是同一个颜色的加深，是重新选的。 */
+  --j-accent: #79b3a4;
+  --j-accent-hover: #8fc4b6;
+  --j-accent-soft: #1e332e;
+  --j-accent-ring: rgba(121, 179, 164, 0.22);
+
+  --j-brass: #d3a460;
+  --j-brass-soft: #33281a;
+
+  --j-danger: #e08a8a;
+  --j-danger-soft: #3a2323;
+
+  /* 深色下投影要更重才有层次——浅色里靠亮边分离，深色里只能靠影 */
+  --j-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --j-shadow-md: 0 4px 20px -4px rgba(0, 0, 0, 0.55);
+  --j-shadow-lg: 0 20px 56px -12px rgba(0, 0, 0, 0.7);
+}
+
+/* 把语义变量接进 Tailwind。
+   inline 是关键：utility 里直接内联 var()，值跟着 .dark 变，
+   而不是生成一份静态的 --color-* 变量（那样深色覆盖不到）。 */
+@theme inline {
+  --color-paper: var(--j-paper);
+  --color-paper-sunken: var(--j-paper-sunken);
+  --color-surface: var(--j-surface);
+  --color-surface-hover: var(--j-surface-hover);
+
+  --color-ink: var(--j-ink);
+  --color-ink-2: var(--j-ink-2);
+  --color-ink-3: var(--j-ink-3);
+  --color-ink-4: var(--j-ink-4);
+
+  --color-line: var(--j-line);
+  --color-line-soft: var(--j-line-soft);
+
+  --color-accent: var(--j-accent);
+  --color-accent-hover: var(--j-accent-hover);
+  --color-accent-soft: var(--j-accent-soft);
+  --color-accent-ring: var(--j-accent-ring);
+
+  --color-brass: var(--j-brass);
+  --color-brass-soft: var(--j-brass-soft);
+
+  --color-danger: var(--j-danger);
+  --color-danger-soft: var(--j-danger-soft);
+
+  --shadow-sm: var(--j-shadow-sm);
+  --shadow-md: var(--j-shadow-md);
+  --shadow-lg: var(--j-shadow-lg);
+
+  --font-sans: var(--j-font-sans);
+  --font-serif: var(--j-font-serif);
+  --font-mono: var(--j-font-mono);
+
+  --radius-card: 10px;
+}
+
+/* ============================================================
+   基础层
+   ============================================================ */
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    /* 中文界面下字体渲染略细一点更耐看 */
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scrollbar-gutter: stable;
   }
 
   body {
     margin: 0;
-    background: var(--color-paper);
-    color: var(--color-ink);
-    font-family: var(--font-sans);
+    background: var(--j-paper);
+    color: var(--j-ink);
+    font-family: var(--j-font-sans);
     font-size: 15px;
     line-height: 1.75;
+    /* 切换主题时给个过渡，生硬跳变很廉价 */
+    transition:
+      background-color 0.25s ease,
+      color 0.25s ease;
   }
 
-  /* 键盘可达性：焦点环要看得见，但不要用浏览器默认那圈突兀的蓝 */
+  /* 焦点环：要看得见，但不用浏览器默认那圈突兀的蓝 */
   :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--j-accent);
     outline-offset: 2px;
+    border-radius: 4px;
   }
 
   ::selection {
-    background: var(--color-accent-soft);
+    background: var(--j-accent-soft);
+    color: var(--j-ink);
+  }
+
+  /* 滚动条：系统默认的那根太抢眼，压细压淡 */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--j-line) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--j-line);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--j-ink-4);
+    background-clip: content-box;
+  }
+
+  /* 数字统一等宽：时间、计数跳动时不会左右抖 */
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 }
 
+/* ============================================================
+   组件层
+   ============================================================ */
 @layer components {
-  /* 输入框：不用大圆角卡片，用下划线 + 极浅底，像在本子上写字 */
+  /* ---------- 排版 ---------- */
+
+  /* 日期分隔 / 小标题：衬线 + 大字距，像笔记本上的日期栏 */
+  .t-rule {
+    font-family: var(--j-font-serif);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    color: var(--j-ink-3);
+  }
+
+  .t-caption {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--j-ink-3);
+  }
+
+  .t-meta {
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--j-ink-3);
+  }
+
+  /* ---------- 卡片 ---------- */
+  .card {
+    background: var(--j-surface);
+    border: 1px solid var(--j-line);
+    border-radius: var(--radius-card);
+  }
+
+  /* ---------- 输入 ---------- */
+
+  /* 输入框：不用大圆角浮空卡片，用极浅底 + 细边，像在本子上写字 */
   .field {
     width: 100%;
-    padding: 10px 14px;
-    border: 1px solid var(--color-line);
-    border-radius: 6px;
-    background: #fff;
-    color: var(--color-ink);
+    padding: 10px 13px;
+    border: 1px solid var(--j-line);
+    border-radius: 8px;
+    background: var(--j-surface);
+    color: var(--j-ink);
     font-size: 15px;
+    font-family: inherit;
+    line-height: 1.6;
     transition:
       border-color 0.18s cubic-bezier(0.25, 1, 0.5, 1),
       box-shadow 0.18s cubic-bezier(0.25, 1, 0.5, 1);
@@ -71,104 +256,226 @@
 
   .field:focus {
     outline: none;
-    border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
+    border-color: var(--j-accent);
+    box-shadow: 0 0 0 3px var(--j-accent-ring);
   }
 
   .field::placeholder {
-    color: var(--color-ink-3);
+    color: var(--j-ink-4);
   }
 
-  /* 主按钮：墨绿实心，无渐变无阴影 */
-  .btn-primary {
+  .field:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* 无边框输入：用在顶栏搜索、大标题这类"不该看出是个框"的地方 */
+  .field-bare {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .field-bare:focus {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  /* ---------- 按钮 ---------- */
+  .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 10px 20px;
-    border-radius: 6px;
-    background: var(--color-accent);
-    color: #fff;
-    font-size: 15px;
+    gap: 7px;
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 14.5px;
     font-weight: 500;
+    font-family: inherit;
     cursor: pointer;
+    white-space: nowrap;
     transition:
-      background 0.18s cubic-bezier(0.25, 1, 0.5, 1),
+      background-color 0.18s cubic-bezier(0.25, 1, 0.5, 1),
+      border-color 0.18s cubic-bezier(0.25, 1, 0.5, 1),
+      color 0.18s cubic-bezier(0.25, 1, 0.5, 1),
       transform 0.18s cubic-bezier(0.25, 1, 0.5, 1);
   }
 
-  .btn-primary:hover:not(:disabled) {
-    background: #173f38;
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
-  .btn-primary:active:not(:disabled) {
+  .btn:active:not(:disabled) {
     transform: translateY(1px);
   }
 
-  .btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  /* 主按钮：墨绿实心，无渐变 */
+  .btn-primary {
+    background: var(--j-accent);
+    color: #fff;
   }
 
-  /* 次要按钮：描边，用于"发送验证码"这类动作 */
+  .btn-primary:hover:not(:disabled) {
+    background: var(--j-accent-hover);
+  }
+
+  .dark .btn-primary {
+    /* 深色下 accent 是亮绿，配白字会糊。改用深色文字压在亮绿上 */
+    color: #10201c;
+  }
+
   .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 10px 16px;
-    border: 1px solid var(--color-line);
-    border-radius: 6px;
-    background: #fff;
-    color: var(--color-ink-2);
-    font-size: 14px;
-    cursor: pointer;
-    transition:
-      border-color 0.18s cubic-bezier(0.25, 1, 0.5, 1),
-      color 0.18s cubic-bezier(0.25, 1, 0.5, 1);
+    border: 1px solid var(--j-line);
+    background: var(--j-surface);
+    color: var(--j-ink-2);
   }
 
   .btn-ghost:hover:not(:disabled) {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+    border-color: var(--j-accent);
+    color: var(--j-accent);
   }
 
-  .btn-ghost:disabled {
-    opacity: 0.5;
+  .btn-quiet {
+    background: transparent;
+    color: var(--j-ink-3);
+  }
+
+  .btn-quiet:hover:not(:disabled) {
+    background: var(--j-paper-sunken);
+    color: var(--j-ink);
+  }
+
+  .btn-danger {
+    border: 1px solid var(--j-line);
+    background: var(--j-surface);
+    color: var(--j-danger);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    border-color: var(--j-danger);
+    background: var(--j-danger-soft);
+  }
+
+  /* 图标按钮：最小 36px 见方，手指点得到 */
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    color: var(--j-ink-3);
+    cursor: pointer;
+    transition:
+      background-color 0.16s ease,
+      color 0.16s ease;
+  }
+
+  .btn-icon:hover:not(:disabled) {
+    background: var(--j-paper-sunken);
+    color: var(--j-ink);
+  }
+
+  .btn-icon:disabled {
+    opacity: 0.45;
     cursor: not-allowed;
   }
 
-  /* 日期分隔：衬线体 + 大字距，像笔记本上的日期栏 */
-  .date-rule {
-    font-family: var(--font-serif);
-    font-size: 13px;
-    letter-spacing: 0.14em;
-    color: var(--color-ink-3);
+  /* ---------- 徽章 / 药丸 ---------- */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    white-space: nowrap;
   }
 
-  /* 正文内容：保留用户换行，行高放宽 */
+  /* ---------- 链接行 ---------- */
+  .link-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--j-accent);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.16s ease;
+  }
+
+  .link-inline:hover {
+    border-bottom-color: currentColor;
+  }
+
+  /* 键帽：快捷键提示里那几个小方块。
+     上边框细、下边框粗，模拟键帽的立体感 —— 纯 CSS，不用贴图 */
+  .kbd {
+    display: inline-block;
+    padding: 0 5px;
+    border: 1px solid var(--j-line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--j-paper-sunken);
+    font-family: var(--j-font-mono);
+    font-size: 11.5px;
+    line-height: 18px;
+    color: var(--j-ink-3);
+  }
+
+  /* ---------- 正文 ---------- */
   .prose-entry {
     white-space: pre-wrap;
     word-break: break-word;
-    line-height: 1.8;
+    line-height: 1.78;
   }
 
-  /* iOS 安全区：底部 tab bar 在全面屏手机上不要被home 条压住 */
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* ---------- 弹层（抽屉 / 底部 sheet） ---------- */
+  .sheet {
+    background: var(--j-surface);
+    border: 1px solid var(--j-line);
   }
 }
 
+/* ============================================================
+   工具类
+   ============================================================ */
 @layer utilities {
-  /* 进入动画：短、缓出，不做弹跳 */
-  .fade-up {
-    animation: fade-up 0.28s cubic-bezier(0.25, 1, 0.5, 1) both;
+  /* iOS 安全区。全面屏手机的底部条会盖住 tab bar，刘海会盖住顶栏 */
+  .safe-b {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  @keyframes fade-up {
+  .safe-t {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-x {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* 进入动画：短、缓出，不做弹跳 */
+  .anim-fade {
+    animation: jot-fade 0.24s cubic-bezier(0.25, 1, 0.5, 1) both;
+  }
+
+  .anim-up {
+    animation: jot-up 0.3s cubic-bezier(0.25, 1, 0.5, 1) both;
+  }
+
+  @keyframes jot-fade {
     from {
       opacity: 0;
-      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes jot-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
@@ -176,9 +483,45 @@
     }
   }
 
+  /* 骨架屏微光。不是转圈——转圈让人以为在等一个"过程"，
+     骨架屏让人知道"内容马上就在这个位置出现" */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--j-paper-sunken) 25%,
+      var(--j-surface-hover) 37%,
+      var(--j-paper-sunken) 63%
+    );
+    background-size: 400% 100%;
+    animation: jot-shimmer 1.4s ease-in-out infinite;
+  }
+
+  @keyframes jot-shimmer {
+    from {
+      background-position: 100% 50%;
+    }
+    to {
+      background-position: 0 50%;
+    }
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* 尊重系统的"减少动态效果"。晕动症用户不是少数 */
   @media (prefers-reduced-motion: reduce) {
-    .fade-up {
-      animation: none;
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
     }
   }
 }

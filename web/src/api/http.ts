@@ -1,4 +1,4 @@
-import type { Page, Stats, User } from '../types'
+import type { Entry, Page, Stats, User } from '../types'
 
 const TOKEN_KEY = 'jotlog.token'
 
@@ -109,6 +109,9 @@ export const api = {
       method: 'POST',
       params: { text },
     }),
+
+  // 详情面板按 id 精取。用于带 ?id= 的链接直达（刷新、分享）时列表里还没有这条
+  entry: (id: number) => request<Entry>(`/api/entries/${id}`),
 
   updateEntry: (id: number, patch: { starred?: boolean; archived?: boolean; note?: string }) =>
     request<{ ok: boolean }>(`/api/entries/${id}`, { method: 'PATCH', body: patch }),

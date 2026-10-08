@@ -2,10 +2,19 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <!-- viewport-fit=cover：iPhone 刘海屏下 PWA 要占满整屏 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- viewport-fit=cover：iPhone 刘海屏下 PWA 要占满整屏。
+         不加 maximum-scale：禁止缩放对视力不好的用户是实打实的伤害 -->
+    <!-- interactive-widget=resizes-content：安卓上键盘弹起时把可视高度压小，
+         底部弹层才不会被键盘盖住。Safari 不支持这个关键字，会忽略，无副作用 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <title>Jotlog · 随手记</title>
-    <meta name="description" content="自托管的私人随手记：飞书发一条，落进自己的 MySQL，手机电脑同一个网址查看。" />
+    <meta
+      name="description"
+      content="自托管的私人随手记：飞书发一条，落进自己的 MySQL，手机电脑同一个网址查看。"
+    />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#FBFAF7" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -13,6 +22,27 @@
     <meta name="apple-mobile-web-app-title" content="Jotlog" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+
+    <script>
+      // 主题在 CSS 加载前就要定下来，否则深色用户会先看到一帧浅色。
+      // 内联而不是放 main.ts：那段 JS 要等模块下载完才跑，来不及。
+      (function () {
+        try {
+          var mode = localStorage.getItem('jotlog.theme') || 'system'
+          var dark =
+            mode === 'dark' ||
+            (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          if (dark) {
+            document.documentElement.classList.add('dark')
+            document
+              .querySelector('meta[name="theme-color"]')
+              .setAttribute('content', '#131311')
+          }
+        } catch (e) {
+          // localStorage 被禁用（隐私模式）就用浅色，不影响登录
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>
