@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.List;
 
 /**
  * 统一入库服务。
@@ -76,7 +77,32 @@ public class IngestService {
         ));
 
         // 4. 附件落盘 + 元数据入库
-        for (Attachment att : entry.attachments()) {
+        saveAttachments(id, entry.attachments());
+
+        log.info("已入库 id={} type={} url={} 有附件={}",
+                id, type, url, entry.attachments().size());
+        return new IngestResult(id, false);
+    }
+
+    /**
+     * 附件落盘 + 元数据入库。
+     *
+     * 公有两处调用：persist 的同步路径（消息里直接带字节的场景），
+     * 和懒下载补挂的异步路径（飞书 file/image 消息，回执后由 Pipeline 下载）。
+     *
+     * bytes 为 null 的占位附件直接跳过 —— 那是"待下载"的记号，
+     * 下载成功后会带着字节再来一次。
+     *
+     * 附件失败不能拖垮主记录，原文已经存下来了。
+     *
+     * @return 实际保存成功的附件数
+     */
+    public int saveAttachments(long entryId, List<Entry.Attachment> list) {
+        int saved = 0;
+        for (Attachment att : list) {
+            if (att.bytes() == null) {
+                continue; // 懒下载占位，不入库
+            }
             try {
                 String sha = sha256(att.bytes());
                 String filename = att.filename() == null ? sha : att.filename();
@@ -86,17 +112,14 @@ public class IngestService {
                     java.nio.file.Files.write(target, att.bytes());
                 }
                 attachments.insert(new AttachmentRepository.NewAttachment(
-                        id, sha, filename, att.mime(), (long) att.bytes().length,
+                        entryId, sha, filename, att.mime(), (long) att.bytes().length,
                         target.toString(), att.sourceKey()));
+                saved++;
             } catch (Exception e) {
-                // 附件失败不能拖垮主记录，原文已经存下来了
-                log.warn("附件保存失败，entryId={} filename={}", id, att.filename(), e);
+                log.warn("附件保存失败，entryId={} filename={}", entryId, att.filename(), e);
             }
         }
-
-        log.info("已入库 id={} type={} url={} 有附件={}",
-                id, type, url, entry.attachments().size());
-        return new IngestResult(id, false);
+        return saved;
     }
 
     private static String sha256(byte[] data) {

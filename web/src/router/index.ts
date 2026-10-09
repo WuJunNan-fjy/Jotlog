@@ -7,11 +7,14 @@ import { useAuthStore } from '../stores/auth'
  * /login 是唯一公开页，其余全部嵌在 AppShell 里（带导航和输入框）。
  * 用 history 模式而不是 hash：URL 干净，刷新时靠后端 SPA 兜底转发到 index.html。
  *
+ * base 取 Vite 的 BASE_URL：线上部署在 /jotlog/ 子路径下时为 /jotlog/，
+ * 本地开发为 /。这样深链接和刷新都能正确匹配路由。
+ *
  * 不做滚动行为配置：滚动条在 AppShell 的内容列上，不在 window 上，
  * router 的 scrollBehavior 管不到它，由 AppShell 自己处理。
  */
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/login',

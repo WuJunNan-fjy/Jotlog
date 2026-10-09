@@ -43,6 +43,15 @@ interface RequestOptions {
 }
 
 /**
+ * 接口前缀。
+ *
+ * 部署在子路径（如 /jotlog/）时，接口也要带同一前缀。
+ * BASE_URL 由 Vite 的 base 决定：生产为 '/jotlog/'，本地开发为 '/'，
+ * 去掉结尾斜杠后本地为 ''，行为与改动前一致。下面的 path 都是 '/api/...'。
+ */
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+
+/**
  * 统一请求出口。
  *
  * 只认一种错误格式：{"error": "..."}，由后端 ApiExceptionHandler 保证。
@@ -51,7 +60,7 @@ interface RequestOptions {
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, params } = options
 
-  let url = path
+  let url = API_BASE + path
   if (params) {
     const search = new URLSearchParams()
     for (const [key, value] of Object.entries(params)) {

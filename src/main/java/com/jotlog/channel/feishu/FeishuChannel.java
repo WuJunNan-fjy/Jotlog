@@ -133,14 +133,27 @@ public class FeishuChannel implements ChannelAdapter {
         String content = msg.getContent();
         String text = extractText(msgType, content);
 
-        if (text == null || text.isBlank()) {
-            // 图片和文件在 M0 先记一条占位，M1 接资源下载
-            if ("image".equals(msgType) || "file".equals(msgType)) {
-                text = "[" + msgType + "]";
-            } else {
-                log.debug("暂不处理的类型 msgType={} messageId={}", msgType, messageId);
+        // 附件消息：同步路径只"报名"，不做任何网络调用。
+        // 占位文本此时首次写入（raw_input 从不改写），带上文件名让时间线可读；
+        // 真正的下载在回执之后由 Pipeline 异步补挂 —— 铁律：入库 → 回执 → 异步增强。
+        List<Entry.Attachment> attachments = List.of();
+        EntryType declaredType = EntryType.UNKNOWN;
+
+        if ((text == null || text.isBlank())
+                && ("image".equals(msgType) || "file".equals(msgType))) {
+            ResourceRef ref = extractResource(msgType, content);
+            if (ref == null) {
+                log.warn("附件消息解析失败 msgType={} messageId={} content={}",
+                        msgType, messageId, abbreviate(content));
                 return;
             }
+            declaredType = "image".equals(msgType) ? EntryType.IMAGE : EntryType.FILE;
+            text = ref.placeholder();
+            attachments = List.of(new Entry.Attachment(
+                    ref.filename(), null, null, ref.fileKey()));
+        } else if (text == null || text.isBlank()) {
+            log.debug("暂不处理的类型 msgType={} messageId={}", msgType, messageId);
+            return;
         }
 
         String senderOpenId = null;
@@ -152,17 +165,80 @@ public class FeishuChannel implements ChannelAdapter {
         ReplyTarget target = new ReplyTarget(chatId, chatType, messageId, senderOpenId);
         Entry entry = new Entry(
                 text,
-                EntryType.UNKNOWN,
+                declaredType,
                 null,
                 target,
                 name(),
                 messageId,
-                List.of(),
+                attachments,
                 Instant.now());
 
         log.info("收到飞书消息 messageId={} chatType={} type={} text={}",
                 messageId, chatType, msgType, abbreviate(text));
         handler.onEntry(entry);
+    }
+
+    private record ResourceRef(String fileKey, String filename, String placeholder) {
+    }
+
+    /**
+     * 从附件消息的 content JSON 里取资源标识。
+     *
+     * 文件消息：{"file_key":"...","file_name":"提示词.txt"}
+     * 图片消息：{"image_key":"..."}（无文件名，下载响应里可能给）
+     */
+    private ResourceRef extractResource(String msgType, String content) {
+        try {
+            var node = mapper.readTree(content);
+            if ("image".equals(msgType)) {
+                String key = node.path("image_key").asText(null);
+                return key == null ? null : new ResourceRef(key, null, "[图片]");
+            }
+            String key = node.path("file_key").asText(null);
+            if (key == null) {
+                return null;
+            }
+            String name = node.path("file_name").asText("未命名文件");
+            return new ResourceRef(key, name, "[文件] " + name);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 下载一条消息的资源（文件或图片）。
+     *
+     * 只在异步线程调用 —— 这里有网络往返，出现在事件回调里就违反 3 秒铁律。
+     * type 参数：file 消息传 "file"，image 消息传 "image"，飞书按它区分取资源的方式。
+     *
+     * @return 字节 + 实际文件名；失败返回 null（条目已入库，附件缺失不致命）
+     */
+    public Downloaded download(String messageId, String fileKey, String type) {
+        if (client == null || client.im() == null) {
+            log.error("资源下载不可用：API 客户端未初始化（见启动自检日志）");
+            return null;
+        }
+        try {
+            var resp = client.im().messageResource().get(
+                    new com.lark.oapi.service.im.v1.model.GetMessageResourceReq.Builder()
+                            .messageId(messageId)
+                            .fileKey(fileKey)
+                            .type(type)
+                            .build());
+
+            if (!resp.success() || resp.getData() == null) {
+                log.error("资源下载失败 code={} msg={} fileKey={}",
+                        resp.getCode(), resp.getMsg(), fileKey);
+                return null;
+            }
+            return new Downloaded(resp.getFileName(), resp.getData().toByteArray());
+        } catch (Exception e) {
+            log.error("资源下载异常 messageId={} fileKey={}", messageId, fileKey, e);
+            return null;
+        }
+    }
+
+    public record Downloaded(String filename, byte[] bytes) {
     }
 
     /**

@@ -56,7 +56,14 @@ public record Entry(
         return new Entry(rawInput, EntryType.NOTE, null, target, source, msgId, List.of(), Instant.now());
     }
 
-    /** 附件载荷。字节在内存中，走完管线立即落盘，不长期驻留。 */
+    /**
+     * 附件载荷。
+     *
+     * bytes 有值 = 字节已在内存，走完管线立即落盘，不长期驻留。
+     * bytes 为 null = 懒下载占位：通道只先报个名（sourceKey 是飞书 file_key），
+     * 真正的下载发生在回执之后的异步阶段 —— 下载是网络调用，
+     * 出现在同步路径上就会撞飞书 3 秒超时被重推。
+     */
     public record Attachment(
             String filename,
             String mime,
