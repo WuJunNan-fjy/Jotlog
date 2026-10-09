@@ -12,11 +12,22 @@ import java.util.List;
 @Repository
 public class JdbcEntryRepository implements EntryRepository {
 
-    /** 所有查询共用同一组列，避免各处手写漏列。 */
+    /**
+     * 所有查询共用同一组列，避免各处手写漏列。
+     *
+     * 附件聚合是两个关联子查询：单用户量级（几千条、附件几条/条）代价可忽略，
+     * 换来前端列表一次请求就拿到"有没有图、有几个附件"，不用逐条再查。
+     * image_sha 取第一张图（按附件 id 升序，即上传顺序），前端拿它拼 raw 预览地址。
+     */
     private static final String COLUMNS = """
-            id, source, entry_type, raw_input, url, domain,
-            title, ai_summary, ai_tags, ai_status, created_at,
-            starred, archived
+            e.id, e.source, e.entry_type, e.raw_input, e.url, e.domain,
+            e.title, e.ai_summary, e.ai_tags, e.ai_status, e.created_at,
+            e.starred, e.archived,
+            (SELECT a.sha256 FROM attachments a
+              WHERE a.entry_id = e.id AND a.mime LIKE 'image/%'
+              ORDER BY a.id LIMIT 1)                          AS image_sha,
+            (SELECT COUNT(*) FROM attachments a
+              WHERE a.entry_id = e.id)                        AS attachment_count
             """;
 
     private final JdbcTemplate jdbc;
@@ -55,7 +66,7 @@ public class JdbcEntryRepository implements EntryRepository {
 
     @Override
     public Row findById(long id) {
-        List<Row> rows = jdbc.query("SELECT " + COLUMNS + " FROM entries WHERE id = ?", ROW, id);
+        List<Row> rows = jdbc.query("SELECT " + COLUMNS + " FROM entries e WHERE e.id = ?", ROW, id);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
@@ -98,7 +109,7 @@ public class JdbcEntryRepository implements EntryRepository {
 
     private List<Row> query(String mode, String kw, String type, Boolean starred,
                             boolean archived, int limit, long offset) {
-        StringBuilder sql = new StringBuilder("SELECT ").append(COLUMNS).append(" FROM entries WHERE ");
+        StringBuilder sql = new StringBuilder("SELECT ").append(COLUMNS).append(" FROM entries e WHERE ");
         List<Object> params = new ArrayList<>();
         conditions(sql, params, mode, kw, type, starred, archived);
         sql.append(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
@@ -287,5 +298,7 @@ public class JdbcEntryRepository implements EntryRepository {
                     ? null
                     : rs.getTimestamp("created_at").toLocalDateTime().toString(),
             rs.getBoolean("starred"),
-            rs.getBoolean("archived"));
+            rs.getBoolean("archived"),
+            rs.getString("image_sha"),
+            rs.getLong("attachment_count"));
 }

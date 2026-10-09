@@ -429,6 +429,163 @@
     line-height: 1.78;
   }
 
+  /* ---------- Markdown 渲染区 ----------
+     排版集中在 .md 的后代选择器里调，MarkdownView 只负责结构。
+     随手记的 md 不该渲染得像博客正文：标题只比正文大一圈，
+     间距压紧 —— 它是"笔记里的结构"，不是"文章的章节"。 */
+  .md {
+    line-height: 1.85;
+    word-break: break-word;
+  }
+
+  .md > :first-child {
+    margin-top: 0;
+  }
+
+  .md > :last-child {
+    margin-bottom: 0;
+  }
+
+  .md p {
+    margin: 0.55em 0;
+  }
+
+  .md h3,
+  .md h4,
+  .md h5,
+  .md h6 {
+    margin: 1em 0 0.35em;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  /* # 一级 → h3。逐级缩差距，最深层和正文几乎同大 */
+  .md h3 {
+    font-size: 1.22em;
+  }
+  .md h4 {
+    font-size: 1.1em;
+  }
+  .md h5,
+  .md h6 {
+    font-size: 1em;
+  }
+
+  .md ul,
+  .md ol {
+    margin: 0.55em 0;
+    padding-left: 1.5em;
+  }
+
+  .md ul {
+    list-style: disc;
+  }
+  .md ol {
+    list-style: decimal;
+  }
+
+  .md li {
+    margin: 0.2em 0;
+  }
+
+  .md li::marker {
+    color: var(--j-ink-4);
+  }
+
+  .md blockquote {
+    margin: 0.7em 0;
+    padding: 0.15em 0 0.15em 0.9em;
+    border-left: 3px solid var(--j-line);
+    color: var(--j-ink-2);
+  }
+
+  .md code {
+    padding: 0.1em 0.4em;
+    border-radius: 5px;
+    background: var(--j-paper-sunken);
+    font-family: var(--j-font-mono);
+    font-size: 0.88em;
+    color: var(--j-ink);
+  }
+
+  /* 围栏代码块。浅色底 + 细边，和整站的"纸"气质一致，不做终端黑 */
+  .md pre {
+    margin: 0.7em 0;
+    padding: 0.8em 1em;
+    border: 1px solid var(--j-line-soft);
+    border-radius: 8px;
+    background: var(--j-paper-sunken);
+    overflow-x: auto;
+  }
+
+  .md pre code {
+    padding: 0;
+    background: transparent;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .md hr {
+    margin: 1.1em 0;
+    border: none;
+    border-top: 1px solid var(--j-line-soft);
+  }
+
+  .md a {
+    color: var(--j-accent);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.16s ease;
+  }
+
+  .md a:hover {
+    border-bottom-color: currentColor;
+  }
+
+  /* 任务项：复选框手绘感 —— 圆角方块 + 勾。完成的文字退灰 */
+  .md-task {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55em;
+    margin: 0.3em 0;
+  }
+
+  .md-check {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    margin-top: 0.35em;
+    border: 1.5px solid var(--j-ink-4);
+    border-radius: 4px;
+    position: relative;
+  }
+
+  .md-check.is-done {
+    border-color: var(--j-accent);
+    background: var(--j-accent);
+  }
+
+  .md-check.is-done::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid #fff;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+
+  .dark .md-check.is-done::after {
+    border-color: #10201c;
+  }
+
+  .md-task-done {
+    color: var(--j-ink-3);
+    text-decoration: line-through;
+    text-decoration-color: var(--j-ink-4);
+  }
+
   /* ---------- 弹层（抽屉 / 底部 sheet） ---------- */
   .sheet {
     background: var(--j-surface);

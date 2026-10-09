@@ -76,6 +76,10 @@ public interface EntryRepository {
      *
      * 带 starred / archived 是为了让列表能显示当前状态 ——
      * 否则前端在"全部"列表里根本不知道哪条加了星标。
+     *
+     * imageSha / attachmentCount 是关联子查询聚合出来的附件摘要：
+     * 列表页靠它们决定要不要给缩略图和附件标记，不用逐条再查。
+     * imageSha 为 null 表示这条没有图片附件。
      */
     record Row(
             long id,
@@ -90,7 +94,9 @@ public interface EntryRepository {
             String aiStatus,
             String createdAt,
             boolean starred,
-            boolean archived
+            boolean archived,
+            String imageSha,
+            long attachmentCount
     ) {
     }
 }

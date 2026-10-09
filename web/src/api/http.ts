@@ -1,4 +1,4 @@
-import type { Entry, Page, Stats, User } from '../types'
+import type { AttachmentMeta, Entry, Page, Stats, User } from '../types'
 
 const TOKEN_KEY = 'jotlog.token'
 
@@ -104,14 +104,19 @@ export const api = {
     size?: number
   }) => request<Page>('/api/entries', { params }),
 
+  // 正文走 JSON body。以前放在 query 里，长笔记会被 URL 长度上限悄悄截断
   createEntry: (text: string) =>
     request<{ id: number; type: string; duplicate: boolean }>('/api/entries', {
       method: 'POST',
-      params: { text },
+      body: { text },
     }),
 
   // 详情面板按 id 精取。用于带 ?id= 的链接直达（刷新、分享）时列表里还没有这条
   entry: (id: number) => request<Entry>(`/api/entries/${id}`),
+
+  // 某条记录的全部附件元数据（含图片和文件）
+  entryAttachments: (id: number) =>
+    request<AttachmentMeta[]>(`/api/entries/${id}/attachments`),
 
   updateEntry: (id: number, patch: { starred?: boolean; archived?: boolean; note?: string }) =>
     request<{ ok: boolean }>(`/api/entries/${id}`, { method: 'PATCH', body: patch }),

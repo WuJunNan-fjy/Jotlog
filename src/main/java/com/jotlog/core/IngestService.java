@@ -1,5 +1,6 @@
 package com.jotlog.core;
 
+import com.jotlog.config.StorageProperties;
 import com.jotlog.core.Entry.Attachment;
 import com.jotlog.core.Entry.ReplyTarget;
 import com.jotlog.repository.AttachmentRepository;

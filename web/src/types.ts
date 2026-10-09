@@ -15,6 +15,19 @@ export interface Entry {
   createdAt: string
   starred: boolean
   archived: boolean
+  /** 首张图片附件的 sha256。有值 = 这条带图，列表可以直接给缩略图 */
+  imageSha: string | null
+  /** 附件总数（图片 + 文件）。0 = 无附件 */
+  attachmentCount: number
+}
+
+/** 附件元数据，详情面板用。见 GET /api/entries/{id}/attachments */
+export interface AttachmentMeta {
+  id: number
+  sha256: string
+  filename: string
+  mime: string | null
+  sizeBytes: number
 }
 
 export interface Page {

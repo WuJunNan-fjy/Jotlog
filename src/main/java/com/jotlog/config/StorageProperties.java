@@ -1,4 +1,4 @@
-package com.jotlog.core;
+package com.jotlog.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

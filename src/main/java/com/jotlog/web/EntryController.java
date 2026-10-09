@@ -71,9 +71,14 @@ public class EntryController {
 
     /**
      * 手动录入。网页顶部的输入框和手机 PWA 最终都打这个接口。
+     *
+     * 正文走 JSON body 而不是 query 参数：一篇长笔记很容易超过
+     * 浏览器/代理对 URL 长度的限制（普遍 2KB-8KB），超了会被
+     * 悄悄截断，用户还以为存全了 —— 数据不完整比报错严重得多。
      */
     @PostMapping("/entries")
-    public ResponseEntity<?> create(@RequestParam String text) {
+    public ResponseEntity<?> create(@RequestBody CreateRequest req) {
+        String text = req == null ? null : req.text();
         if (text == null || text.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "text 不能为空"));
         }
@@ -129,5 +134,8 @@ public class EntryController {
     }
 
     public record UpdateRequest(Boolean starred, Boolean archived, String note) {
+    }
+
+    public record CreateRequest(String text) {
     }
 }

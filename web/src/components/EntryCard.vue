@@ -18,7 +18,9 @@
       </div>
 
       <div class="min-w-0 flex-1">
-        <!-- 分段渲染而不是 v-html：见 utils/highlight.ts 里的说明，这是安全底线 -->
+        <!-- 分段渲染而不是 v-html：见 utils/highlight.ts 里的说明，这是安全底线。
+             正文先用 plainPreview 剥掉 md 符号 —— 预览要的是"写了什么"，
+             不是语法本身。#标题 **加粗** 这些符号在扫读里全是噪音。 -->
         <p class="prose-entry text-[15px] text-ink">
           <template v-for="(seg, i) in rawSegments" :key="i"><mark
               v-if="seg.hit"
@@ -57,6 +59,15 @@
           <span class="truncate">{{ host }}</span>
         </a>
 
+        <!-- 附件标记。图片已经在右侧给了缩略图，这里只补"还有别的文件"的部分 -->
+        <span
+          v-if="fileCount > 0"
+          class="chip bg-paper-sunken text-ink-3 mt-2"
+        >
+          <Icon name="file" :size="12" />
+          {{ fileCount }} 个附件
+        </span>
+
         <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
           <TypeBadge :type="entry.entryType" />
           <span v-for="tag in tags" :key="tag" class="chip bg-paper-sunken text-ink-3">
@@ -65,6 +76,17 @@
           <span class="text-[11.5px] text-ink-4">{{ sourceLabel }}</span>
         </div>
       </div>
+
+      <!-- 缩略图：有条目带图时直接给"内容本位"的预览。
+           扫一眼就知道哪条是图，不用点进去才发现。 -->
+      <button
+        v-if="entry.imageSha"
+        class="shrink-0 self-center"
+        :aria-label="'查看图片'"
+        @click.stop="emit('open')"
+      >
+        <AttachmentImage :sha="entry.imageSha" size="64px" />
+      </button>
 
       <!-- 操作区。
            移动端只留星标 —— 它是唯一"想起来就要随手点一下"的动作，
@@ -132,7 +154,9 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import type { Entry } from '../types'
 import { formatTime, hostLabel } from '../utils/format'
 import { splitHighlight } from '../utils/highlight'
+import { plainPreview } from '../utils/markdown'
 import { sourceLabel as sourceText } from '../utils/entryMeta'
+import AttachmentImage from './AttachmentImage.vue'
 import Icon from './Icon.vue'
 import TypeBadge from './TypeBadge.vue'
 
@@ -149,10 +173,17 @@ const confirming = ref(false)
 let resetTimer: ReturnType<typeof setTimeout> | null = null
 
 const time = computed(() => formatTime(props.entry.createdAt))
-const rawSegments = computed(() => splitHighlight(props.entry.rawInput, props.highlight ?? ''))
+/** 预览文本：md 语法剥掉，只留字。高亮仍然按剥完之后的文本算 —— 用户看到的和能高亮的是同一份 */
+const previewText = computed(() => plainPreview(props.entry.rawInput))
+const rawSegments = computed(() => splitHighlight(previewText.value, props.highlight ?? ''))
 const host = computed(() => hostLabel(props.entry.url ?? '', props.entry.domain))
 const hostInitial = computed(() => host.value.slice(0, 1).toUpperCase())
 const sourceLabel = computed(() => sourceText(props.entry.source))
+
+/** 非图片附件数。图片已在右侧缩略图，别重复报 */
+const fileCount = computed(() =>
+  Math.max(props.entry.attachmentCount - (props.entry.imageSha ? 1 : 0), 0),
+)
 
 /** aiTags 是逗号或空格分隔的一串，页面上一个一个显示成小药丸 */
 const tags = computed(() =>
