@@ -50,13 +50,14 @@ public class AttachmentRepository {
     /** 按 sha 找附件（raw 端点用）。sha 全库唯一索引，同一文件去重共享。 */
     public Optional<Stored> findBySha(String sha) {
         List<Stored> rows = jdbc.query(
-                "SELECT id, sha256, filename, mime, storage_path FROM attachments "
+                "SELECT id, sha256, filename, mime, size_bytes, storage_path FROM attachments "
                         + "WHERE sha256 = ? ORDER BY id LIMIT 1",
                 (rs, i) -> new Stored(
                         rs.getLong("id"),
                         rs.getString("sha256"),
                         rs.getString("filename"),
                         rs.getString("mime"),
+                        rs.getLong("size_bytes"),
                         rs.getString("storage_path")),
                 sha);
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
@@ -66,8 +67,9 @@ public class AttachmentRepository {
     public record Meta(long id, String sha256, String filename, String mime, long sizeBytes) {
     }
 
-    /** 含落盘路径的完整信息，只有服务端读文件用，不出去。 */
-    public record Stored(long id, String sha256, String filename, String mime, String storagePath) {
+    /** 含存储位置的完整信息，只有服务端读内容用，不出去。 */
+    public record Stored(long id, String sha256, String filename, String mime,
+                         long sizeBytes, String storagePath) {
     }
 
     public record NewAttachment(

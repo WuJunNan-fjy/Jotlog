@@ -32,10 +32,10 @@
           <button
             v-for="opt in themeOptions"
             :key="opt.value"
-            class="flex flex-col items-center gap-1.5 rounded-lg border py-3.5 transition-colors"
+            class="flex flex-col items-center gap-1.5 rounded-[4px] border py-3.5 transition-colors"
               :class="
                 mode === opt.value
-                  ? 'border-accent bg-accent-soft text-accent'
+                  ? 'border-ink bg-ink text-paper'
                   : 'border-line text-ink-3 hover:text-ink'
               "
               @click="set(opt.value)"

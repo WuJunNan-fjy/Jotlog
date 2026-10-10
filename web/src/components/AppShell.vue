@@ -18,7 +18,7 @@
       <div class="flex min-h-0 flex-1">
         <main ref="scrollEl" class="min-w-0 flex-1 overflow-y-auto" @scroll.passive="onScroll">
           <!-- 内容列最宽 760px。再宽一行字就太长了，读起来要"找下一行在哪" -->
-          <div class="mx-auto w-full max-w-[760px] px-4 py-5 sm:px-6 md:py-8">
+          <div class="mx-auto w-full max-w-[760px] px-5 py-5 sm:px-6 md:py-8">
             <RouterView />
           </div>
         </main>
@@ -70,7 +70,7 @@
          桌面有时间线顶部常驻的输入框，再飘一个圆按钮是多余的 -->
     <button
       v-if="isCompact"
-      class="fixed right-4 z-30 flex h-13 w-13 items-center justify-center rounded-full bg-accent text-white shadow-lg transition-transform active:scale-95 md:hidden dark:text-[#10201c]"
+      class="fixed right-5 z-30 flex h-13 w-13 items-center justify-center rounded-[14px] bg-ink text-paper shadow-lg transition-transform active:scale-95 md:hidden"
       :style="{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }"
       aria-label="记一笔"
       @click="ui.openCompose()"

@@ -1,14 +1,17 @@
 <template>
   <div>
-    <!-- 页头。
-         日期放在最上面，因为这是一个"本子"——翻开先看到今天，而不是"时间线"三个字。
-         数字只给"全部"页：星标页和归档页再报一遍总数没有意义。 -->
-    <header v-if="mode === 'all'" class="mb-6">
+    <!-- 桌面刊头：刊物的门面，带印数 -->
+    <div v-if="mode === 'all' && !isCompact" class="mb-8">
+      <Masthead />
+    </div>
+
+    <!-- 手机紧凑页头：只放今天 + 条数，不占首屏 -->
+    <header v-if="mode === 'all' && isCompact" class="mb-6">
       <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h1 class="font-serif text-[21px] leading-tight tracking-wide text-ink">
           {{ todayLabel }}
         </h1>
-        <p v-if="isCompact && stats.data" class="tabular text-[12.5px] text-ink-3">
+        <p v-if="stats.data" class="tabular text-[12.5px] text-ink-3">
           共 {{ stats.data.total }} 条 · 今天 {{ stats.data.today }}
         </p>
       </div>
@@ -45,7 +48,7 @@
       <section v-for="group in groups" :key="group.key">
         <!-- 日期分隔吸顶：往下翻的时候始终知道"现在翻到哪天了" -->
         <div
-          class="t-rule border-line-soft bg-paper/92 sticky top-0 z-10 -mx-4 border-b px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6"
+          class="t-rule border-line-soft bg-paper/92 sticky top-0 z-10 -mx-5 border-b px-5 py-2 backdrop-blur sm:-mx-6 sm:px-6"
         >
           {{ group.label }}
         </div>
@@ -83,6 +86,7 @@ import { useStatsStore } from '../stores/stats'
 import { useUiStore } from '../stores/ui'
 import ComposeBox from '../components/ComposeBox.vue'
 import EntryCard from '../components/EntryCard.vue'
+import Masthead from '../components/Masthead.vue'
 import EmptyState from '../components/EmptyState.vue'
 import SkeletonList from '../components/SkeletonList.vue'
 import Icon from '../components/Icon.vue'

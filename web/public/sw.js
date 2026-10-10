@@ -7,7 +7,7 @@
 //   静态资源     —— 缓存优先。文件名带 hash，内容变了文件名就变，不存在"缓存住旧版本"
 //
 // 版本号手动加。改了任何被缓存的资源就要 +1，否则用户拿到的是旧文件。
-const CACHE = 'jotlog-v3'
+const CACHE = 'jotlog-v4'
 
 self.addEventListener('install', (event) => {
   // 预缓存壳子，这样第一次离线打开也有东西可渲染

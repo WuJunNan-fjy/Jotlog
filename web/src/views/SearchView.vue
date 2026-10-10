@@ -26,15 +26,15 @@
     </div>
 
     <!-- 类型筛选 -->
-    <div class="no-scrollbar -mx-4 mb-5 flex gap-1.5 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
+    <div class="no-scrollbar -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
       <button
         v-for="f in TYPE_FILTERS"
         :key="f.value"
         class="chip shrink-0 border transition-colors"
         :class="
           type === f.value
-            ? 'border-accent bg-accent-soft text-accent'
-            : 'border-line bg-surface text-ink-3 hover:text-ink'
+            ? 'border-ink bg-ink text-paper'
+            : 'border-line bg-transparent text-ink-3 hover:text-ink'
         "
         @click="setType(f.value)"
       >

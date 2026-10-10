@@ -1,24 +1,32 @@
 <template>
-  <div class="safe-x safe-b flex min-h-[100dvh] items-center justify-center px-5 py-10">
+  <div
+    class="safe-b flex min-h-[100dvh] items-center justify-center py-10 pl-[calc(1.5rem+env(safe-area-inset-left,0px))] pr-[calc(1.5rem+env(safe-area-inset-right,0px))]"
+  >
     <div class="anim-up w-full max-w-[392px]">
-      <!-- 品牌 -->
-      <div class="mb-8 text-center">
-        <span
-          class="mb-4 inline-grid h-12 w-12 place-items-center rounded-xl bg-accent font-serif text-[22px] leading-none text-white shadow-md dark:text-[#10201c]"
-        >
-          J
-        </span>
-        <h1 class="font-serif text-[27px] leading-none tracking-wide text-ink">Jotlog</h1>
-        <p class="mt-2.5 text-[13px] leading-relaxed text-ink-3">
-          随手记一笔，落进自己的数据库。<br />
-          手机和电脑，同一个网址。
+      <!-- 刊头 -->
+      <div class="mb-7">
+        <div class="border-t-[2px] border-ink"></div>
+        <div class="flex items-end justify-between py-3">
+          <p class="font-display text-[29px] font-medium leading-none tracking-[-0.02em]">
+            Jotlog
+          </p>
+          <p class="font-mono pb-[2px] text-[10px] tracking-[0.2em] text-ink-3">
+            SIGN IN · 登 录
+          </p>
+        </div>
+        <div class="border-t border-ink"></div>
+        <p class="py-3 text-[13px] leading-relaxed text-ink-2">
+          随手记一笔，落进自己的数据库。手机和电脑，同一个网址。
         </p>
+        <div class="border-t border-line"></div>
       </div>
 
-      <form class="card p-6 shadow-md" @submit.prevent="submit">
-        <div class="space-y-3">
+      <form @submit.prevent="submit">
+        <div class="space-y-4">
           <label class="block">
-            <span class="mb-1.5 block text-[12.5px] text-ink-3">用户名</span>
+            <span class="mb-1 block text-[11px] font-medium tracking-[0.16em] text-ink-3"
+              >用户名 USERNAME</span
+            >
             <input
               ref="userInput"
               v-model="username"
@@ -31,7 +39,9 @@
           </label>
 
           <label class="block">
-            <span class="mb-1.5 block text-[12.5px] text-ink-3">密码</span>
+            <span class="mb-1 block text-[11px] font-medium tracking-[0.16em] text-ink-3"
+              >密码 PASSWORD</span
+            >
             <input
               v-model="password"
               class="field"
@@ -42,7 +52,9 @@
           </label>
 
           <label class="block">
-            <span class="mb-1.5 block text-[12.5px] text-ink-3">邮箱验证码</span>
+            <span class="mb-1 block text-[11px] font-medium tracking-[0.16em] text-ink-3"
+              >邮箱验证码 EMAIL CODE</span
+            >
             <div class="flex gap-2">
               <input
                 v-model="code"
@@ -67,7 +79,7 @@
         </div>
 
         <button type="submit" class="btn btn-primary mt-5 w-full py-2.5" :disabled="busy">
-          {{ busy ? '登录中…' : '登录' }}
+          {{ busy ? '登录中…' : '登录 SIGN IN' }}
         </button>
 
         <Transition
@@ -76,13 +88,13 @@
         >
           <p
             v-if="error"
-            class="mt-3 rounded-lg bg-danger-soft px-3.5 py-2.5 text-[13px] leading-relaxed text-danger"
+            class="mt-3 border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-[13px] leading-relaxed text-danger"
           >
             {{ error }}
           </p>
           <p
             v-else-if="notice"
-            class="mt-3 rounded-lg bg-accent-soft px-3.5 py-2.5 text-[13px] leading-relaxed text-accent"
+            class="border-line mt-3 border bg-surface px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-2"
           >
             {{ notice }}
           </p>

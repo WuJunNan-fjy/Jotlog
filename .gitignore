@@ -15,6 +15,8 @@ attachments/
 # ---- 前端 ----
 web/node_modules/
 web/dist/
+# 字体构建脚本（web/scripts/build-fonts.py）的 npm 缓存，可随时重新生成
+web/.fontcache/
 # 图标是脚本生成的，但产物要提交（PWA 需要），所以不忽略 public/*.png
 
 # ---- 密钥：绝对不能进Git ----

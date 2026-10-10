@@ -99,7 +99,14 @@ jotlog:
       mention-only: true
       receipt-text: "已记下，稍后补全"
   storage:
+    # local=写本机磁盘（默认）；oss=阿里云 OSS。切 oss 必须配齐下面四项
+    type: ${JOTLOG_STORAGE_TYPE:local}
     attachment-dir: ${JOTLOG_ATTACHMENT_DIR:./data/attachments}
+    oss:
+      endpoint: ${JOTLOG_OSS_ENDPOINT:}
+      access-key-id: ${JOTLOG_OSS_ACCESS_KEY_ID:}
+      access-key-secret: ${JOTLOG_OSS_ACCESS_KEY_SECRET:}
+      bucket-name: ${JOTLOG_OSS_BUCKET_NAME:}
 
 management:
   endpoints:

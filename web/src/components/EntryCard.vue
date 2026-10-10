@@ -1,58 +1,52 @@
 <template>
   <article
-    class="group border-line-soft relative cursor-pointer border-b transition-colors last:border-b-0"
-    :class="selected ? 'bg-accent-soft/45' : 'hover:bg-surface-hover'"
+    class="entry group border-line-soft relative cursor-pointer border-b transition-colors last:border-b-0"
+    :class="[selected ? 'is-selected' : 'hover:bg-surface-hover']"
     @click="emit('open')"
   >
-    <!-- 选中标记：一根竖线，不用边框框住整行 —— 框住会让列表变成一堆卡片，扫读变慢 -->
-    <span
-      v-if="selected"
-      class="absolute top-2 bottom-2 left-0 w-[2.5px] rounded-r bg-accent"
-      aria-hidden="true"
-    ></span>
-
     <div class="flex gap-3 py-3.5 pr-3 pl-4">
-      <!-- 时间单独一列：扫读时能快速定位"这是什么时候记的" -->
+      <!-- 时间单独一列：Fraunces 衬线数字，刊物的时间眉批 -->
       <div class="w-9 shrink-0 pt-[3px] text-right md:w-11">
-        <time class="tabular text-[12px] text-ink-3">{{ time }}</time>
+        <time class="e-time font-display tabular text-[12.5px] text-ink-3">{{ time }}</time>
       </div>
 
       <div class="min-w-0 flex-1">
         <!-- 分段渲染而不是 v-html：见 utils/highlight.ts 里的说明，这是安全底线。
              正文先用 plainPreview 剥掉 md 符号 —— 预览要的是"写了什么"，
              不是语法本身。#标题 **加粗** 这些符号在扫读里全是噪音。 -->
-        <p class="prose-entry text-[15px] text-ink">
-          <template v-for="(seg, i) in rawSegments" :key="i"><mark
-              v-if="seg.hit"
-              class="rounded-[2px] bg-brass-soft px-[1px] text-ink"
-              >{{ seg.text }}</mark
-            ><template v-else>{{ seg.text }}</template></template>
+        <p class="e-text prose-entry text-[15px] text-ink">
+          <template v-for="(seg, i) in rawSegments" :key="i"><mark v-if="seg.hit">{{
+              seg.text
+            }}</mark><template v-else>{{ seg.text }}</template></template>
         </p>
 
         <!-- AI 补充区。左边一道细线 + 弱化字色，
              让人一眼分清"我写的"和"机器补的" —— 这是整个产品的立身之本 -->
         <p
           v-if="entry.aiSummary"
-          class="mt-2 border-l-2 border-line pl-3 text-[13.5px] leading-relaxed text-ink-2"
+          class="e-sub mt-2 border-l-2 border-line pl-3 text-[13.5px] leading-relaxed text-ink-2"
         >
           {{ entry.aiSummary }}
         </p>
-        <p v-else-if="entry.title" class="mt-1.5 truncate text-[13.5px] text-ink-2">
+        <p
+          v-else-if="entry.title"
+          class="e-sub mt-1.5 truncate text-[13.5px] text-ink-2"
+        >
           {{ entry.title }}
         </p>
 
-        <!-- 链接：域名前加一块首字母色块，替代 favicon。
+        <!-- 链接：域名前加一块首字母方块，替代 favicon。
              不请求第三方 favicon 服务 —— 那等于告诉别人你收藏了什么 -->
         <a
           v-if="entry.url"
           :href="entry.url"
           target="_blank"
           rel="noopener noreferrer"
-          class="mt-2.5 inline-flex max-w-full items-center gap-2 text-[13px] text-accent"
+          class="mt-2.5 inline-flex max-w-full items-center gap-2 text-[13px] text-ink-2"
           @click.stop
         >
           <span
-            class="grid h-[18px] w-[18px] shrink-0 place-items-center rounded bg-accent-soft text-[10px] font-medium text-accent"
+            class="e-host font-display grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[2px] border border-line text-[10px] font-medium"
           >
             {{ hostInitial }}
           </span>
@@ -60,20 +54,17 @@
         </a>
 
         <!-- 附件标记。图片已经在右侧给了缩略图，这里只补"还有别的文件"的部分 -->
-        <span
-          v-if="fileCount > 0"
-          class="chip bg-paper-sunken text-ink-3 mt-2"
-        >
+        <span v-if="fileCount > 0" class="e-chip chip bg-paper-sunken text-ink-3 mt-2">
           <Icon name="file" :size="12" />
           {{ fileCount }} 个附件
         </span>
 
         <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-          <TypeBadge :type="entry.entryType" />
-          <span v-for="tag in tags" :key="tag" class="chip bg-paper-sunken text-ink-3">
+          <TypeBadge :type="entry.entryType" class="e-chip" />
+          <span v-for="tag in tags" :key="tag" class="e-chip chip bg-paper-sunken text-ink-3">
             {{ tag }}
           </span>
-          <span class="text-[11.5px] text-ink-4">{{ sourceLabel }}</span>
+          <span class="e-source text-[11.5px] text-ink-4">{{ sourceLabel }}</span>
         </div>
       </div>
 
@@ -98,8 +89,8 @@
       >
         <template v-if="!confirming">
           <button
-            class="btn-icon h-8 w-8"
-            :class="entry.starred ? 'text-brass' : ''"
+            class="e-star btn-icon h-8 w-8"
+            :class="entry.starred ? 'text-ink' : ''"
             :title="entry.starred ? '取消星标' : '加星标'"
             :aria-pressed="entry.starred"
             @click.stop="emit('toggleStar')"

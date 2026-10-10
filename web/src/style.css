@@ -19,80 +19,80 @@
 :root {
   color-scheme: light;
 
-  /* 底：纸。三层，越靠前越"近" */
-  --j-paper: #fbfaf7;
-  --j-paper-sunken: #f5f3ed;
-  --j-surface: #ffffff;
-  --j-surface-hover: #f7f5ef;
+  /* 底：纸。刊物用的骨白纸，偏暖但克制 */
+  --j-paper: #f2efe5;
+  --j-paper-sunken: #e8e3d4;
+  --j-surface: #f7f4eb;
+  --j-surface-hover: #eae5d6;
 
-  /* 墨：字。ink 最深，ink-4 只用于占位符和禁用态 */
-  --j-ink: #1a1917;
-  --j-ink-2: #57534c;
-  --j-ink-3: #857f76;
-  --j-ink-4: #a8a29a;
+  /* 墨：字。近黑的墨褐，ink-4 只用于占位符和禁用态 */
+  --j-ink: #15130d;
+  --j-ink-2: #474338;
+  --j-ink-3: #797363;
+  --j-ink-4: #a49d8a;
 
-  /* 线：分隔。line 是"看得见的分界"，line-soft 是"同组内的弱分界" */
-  --j-line: #e5e1d8;
-  --j-line-soft: #eeebe3;
+  /* 线：发丝线。刊物靠线分层，不用卡片投影 */
+  --j-line: #d3ccb8;
+  --j-line-soft: #e4ddc9;
 
-  /* 强调：墨绿。全站只有这一个主色，不搞渐变 */
-  --j-accent: #1f4f46;
-  --j-accent-hover: #173f38;
-  --j-accent-soft: #e6eeeb;
-  --j-accent-ring: rgba(31, 79, 70, 0.16);
+  /* 强调色在刊物体系里就是墨本身：选中即反白（黑底纸字） */
+  --j-accent: #15130d;
+  --j-accent-hover: #000000;
+  --j-accent-soft: #e8e3d4;
+  --j-accent-ring: rgba(21, 19, 13, 0.14);
 
-  /* 次强调：铜色。给星标用——星标是"我特别标出来的"，不该和主色抢 */
-  --j-brass: #8a5a1b;
-  --j-brass-soft: #f6eedf;
+  /* 星标：实心墨星 */
+  --j-brass: #15130d;
+  --j-brass-soft: #e8e3d4;
 
-  --j-danger: #9b2c2c;
-  --j-danger-soft: #f7e9e9;
+  /* 危险色同样收进墨色，破坏性靠版式和反转区分 */
+  --j-danger: #15130d;
+  --j-danger-soft: #e8e3d4;
 
-  --j-shadow-sm: 0 1px 2px rgba(26, 25, 23, 0.05);
-  --j-shadow-md: 0 4px 16px -4px rgba(26, 25, 23, 0.1);
-  --j-shadow-lg: 0 16px 48px -12px rgba(26, 25, 23, 0.2);
+  --j-shadow-sm: 0 1px 2px rgba(21, 19, 13, 0.05);
+  --j-shadow-md: 0 2px 14px -4px rgba(21, 19, 13, 0.16);
+  --j-shadow-lg: 0 24px 56px -16px rgba(21, 19, 13, 0.3);
 
-  --j-font-sans: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', system-ui, -apple-system,
-    'Segoe UI', sans-serif;
-  --j-font-serif: 'Songti SC', 'Source Han Serif SC', 'Noto Serif CJK SC', Georgia,
+  --j-font-display: 'Fraunces Variable', 'Noto Serif SC', Georgia, 'Times New Roman', serif;
+  --j-font-sans: 'Noto Sans SC Variable', 'PingFang SC', 'HarmonyOS Sans SC',
+    'Microsoft YaHei', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --j-font-serif: 'Noto Serif SC', 'Songti SC', 'Source Han Serif SC', Georgia,
     'Times New Roman', serif;
-  --j-font-mono: 'SFMono-Regular', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  --j-font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, 'Courier New', monospace;
 }
 
 .dark {
   color-scheme: dark;
 
-  /* 深色不是把浅色反过来。纸在暗处是"墨纸"—— 偏暖的黑褐，不是纯灰。
-     纯 #000 配暖白文字会显得像终端，不是本子。 */
-  --j-paper: #131311;
-  --j-paper-sunken: #0e0e0d;
-  --j-surface: #1c1b19;
-  --j-surface-hover: #232220;
+  /* 夜间刊本：暖黑底，纸面文字。不是纯 #000，也不是把浅色反过来 */
+  --j-paper: #12110d;
+  --j-paper-sunken: #0c0b08;
+  --j-surface: #1b1a15;
+  --j-surface-hover: #24221c;
 
-  --j-ink: #edeae3;
-  --j-ink-2: #b5afa5;
-  --j-ink-3: #8b857c;
-  --j-ink-4: #6a655e;
+  --j-ink: #ebe6d9;
+  --j-ink-2: #ada695;
+  --j-ink-3: #827c6d;
+  --j-ink-4: #5d574b;
 
-  --j-line: #322f2b;
-  --j-line-soft: #26251f;
+  --j-line: #2f2c24;
+  --j-line-soft: #24221c;
 
-  /* 深色下墨绿几乎看不见，得提亮。不是同一个颜色的加深，是重新选的。 */
-  --j-accent: #79b3a4;
-  --j-accent-hover: #8fc4b6;
-  --j-accent-soft: #1e332e;
-  --j-accent-ring: rgba(121, 179, 164, 0.22);
+  /* 夜里的墨是纸色：选中仍是反白，深浅两套动作一致 */
+  --j-accent: #ebe6d9;
+  --j-accent-hover: #ffffff;
+  --j-accent-soft: #26241e;
+  --j-accent-ring: rgba(235, 230, 217, 0.16);
 
-  --j-brass: #d3a460;
-  --j-brass-soft: #33281a;
+  --j-brass: #ebe6d9;
+  --j-brass-soft: #26241e;
 
-  --j-danger: #e08a8a;
-  --j-danger-soft: #3a2323;
+  --j-danger: #ebe6d9;
+  --j-danger-soft: #26241e;
 
-  /* 深色下投影要更重才有层次——浅色里靠亮边分离，深色里只能靠影 */
   --j-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --j-shadow-md: 0 4px 20px -4px rgba(0, 0, 0, 0.55);
-  --j-shadow-lg: 0 20px 56px -12px rgba(0, 0, 0, 0.7);
+  --j-shadow-lg: 0 24px 56px -16px rgba(0, 0, 0, 0.72);
 }
 
 /* 把语义变量接进 Tailwind。
@@ -127,11 +127,12 @@
   --shadow-md: var(--j-shadow-md);
   --shadow-lg: var(--j-shadow-lg);
 
+  --font-display: var(--j-font-display);
   --font-sans: var(--j-font-sans);
   --font-serif: var(--j-font-serif);
   --font-mono: var(--j-font-mono);
 
-  --radius-card: 10px;
+  --radius-card: 7px;
 }
 
 /* ============================================================
@@ -158,6 +159,23 @@
       color 0.25s ease;
   }
 
+  /* 印刷肌理：一层极淡的新闻纸噪点，盖在所有内容上，
+     不拦截指针。纯色屏幕像 SaaS，有这层才像印刷品 */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+    opacity: 0.05;
+  }
+
+  .dark body::before {
+    opacity: 0.1;
+  }
+
   /* 焦点环：要看得见，但不用浏览器默认那圈突兀的蓝 */
   :focus-visible {
     outline: 2px solid var(--j-accent);
@@ -166,8 +184,9 @@
   }
 
   ::selection {
-    background: var(--j-accent-soft);
-    color: var(--j-ink);
+    /* 文本选择也走"印墨"：黑底纸字，跟 mark、is-selected 是同一套语言 */
+    background: var(--j-ink);
+    color: var(--j-paper);
   }
 
   /* 滚动条：系统默认的那根太抢眼，压细压淡 */
@@ -209,11 +228,11 @@
 @layer components {
   /* ---------- 排版 ---------- */
 
-  /* 日期分隔 / 小标题：衬线 + 大字距，像笔记本上的日期栏 */
+  /* 日期分隔 / 小标题：刊眉样式，衬线 + 大字距 */
   .t-rule {
     font-family: var(--j-font-serif);
-    font-size: 13px;
-    letter-spacing: 0.14em;
+    font-size: 12px;
+    letter-spacing: 0.24em;
     color: var(--j-ink-3);
   }
 
@@ -234,6 +253,16 @@
     background: var(--j-surface);
     border: 1px solid var(--j-line);
     border-radius: var(--radius-card);
+  }
+
+  /* ---------- 条目行 ----------
+     选中反白体系在文件末尾、@layer 之外定义：
+     Tailwind v4 里 utilities 层压过 components 层（分层优先于优先级），
+     放这里子元素身上的 text-ink / bg-* 工具类会反过来赢，反白就失效了。 */
+  .entry {
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
   }
 
   /* ---------- 输入 ---------- */
@@ -309,10 +338,10 @@
     transform: translateY(1px);
   }
 
-  /* 主按钮：墨绿实心，无渐变 */
+  /* 主按钮：实心墨，无渐变。文字用纸色 */
   .btn-primary {
     background: var(--j-accent);
-    color: #fff;
+    color: var(--j-paper);
   }
 
   .btn-primary:hover:not(:disabled) {
@@ -320,8 +349,8 @@
   }
 
   .dark .btn-primary {
-    /* 深色下 accent 是亮绿，配白字会糊。改用深色文字压在亮绿上 */
-    color: #10201c;
+    /* 夜里按钮是纸色底，压墨色字 */
+    color: #12110d;
   }
 
   .btn-ghost {
@@ -577,7 +606,7 @@
   }
 
   .dark .md-check.is-done::after {
-    border-color: #10201c;
+    border-color: #12110d;
   }
 
   .md-task-done {
@@ -681,4 +710,57 @@
       transition-duration: 0.01ms !important;
     }
   }
+}
+
+/* ============================================================
+   条目行 · 选中反白体系（UNLAYERED）
+
+   故意不放进任何 @layer：Tailwind v4 预声明了
+   @layer theme, base, components, utilities —— 分层比较优先于
+   选择器优先级，utilities 层里一个 .text-ink 就能压过 components
+   层里的 .entry.is-selected .e-text。无层样式优先于一切分层，
+   所以放这里反白才能真正接管整行。
+   ============================================================ */
+.entry.is-selected {
+  background: var(--j-ink);
+  color: var(--j-paper);
+}
+
+.entry.is-selected .e-time,
+.entry.is-selected .e-text,
+.entry.is-selected .e-star {
+  color: var(--j-paper);
+}
+
+.entry.is-selected .e-sub {
+  border-color: color-mix(in srgb, var(--j-paper) 26%, transparent);
+  color: color-mix(in srgb, var(--j-paper) 72%, transparent);
+}
+
+.entry.is-selected .e-host {
+  background: color-mix(in srgb, var(--j-paper) 13%, transparent);
+  border-color: color-mix(in srgb, var(--j-paper) 30%, transparent);
+  color: var(--j-paper);
+}
+
+.entry.is-selected .e-chip {
+  background: color-mix(in srgb, var(--j-paper) 13%, transparent);
+  color: color-mix(in srgb, var(--j-paper) 75%, transparent);
+}
+
+.entry.is-selected .e-source {
+  color: color-mix(in srgb, var(--j-paper) 50%, transparent);
+}
+
+/* 搜索命中：平时黑底纸字；在反白行里反转回纸底墨字 */
+.entry mark {
+  border-radius: 1px;
+  background: var(--j-ink);
+  padding: 0 1px;
+  color: var(--j-paper);
+}
+
+.entry.is-selected mark {
+  background: var(--j-paper);
+  color: var(--j-ink);
 }

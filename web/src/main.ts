@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { initTheme } from './composables/useTheme'
+import './fonts'
 import './style.css'
 
 // 主题必须在挂载前定好，否则第一帧会用浅色渲染，深色用户会看到闪一下白

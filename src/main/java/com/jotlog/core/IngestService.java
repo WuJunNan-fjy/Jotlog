@@ -1,17 +1,16 @@
 package com.jotlog.core;
 
-import com.jotlog.config.StorageProperties;
 import com.jotlog.core.Entry.Attachment;
 import com.jotlog.core.Entry.ReplyTarget;
 import com.jotlog.repository.AttachmentRepository;
 import com.jotlog.repository.EntryRepository;
 import com.jotlog.repository.JdbcEntryRepository;
+import com.jotlog.storage.StorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
@@ -30,14 +29,14 @@ public class IngestService {
 
     private final EntryRepository entries;
     private final AttachmentRepository attachments;
-    private final Path storageRoot;
+    private final StorageService storage;
 
     public IngestService(JdbcEntryRepository entries,
                          AttachmentRepository attachments,
-                         StorageProperties storage) {
+                         StorageService storage) {
         this.entries = entries;
         this.attachments = attachments;
-        this.storageRoot = storage.getAttachmentPath();
+        this.storage = storage;
     }
 
     /**
@@ -106,14 +105,13 @@ public class IngestService {
             try {
                 String sha = sha256(att.bytes());
                 String filename = att.filename() == null ? sha : att.filename();
-                Path target = storageRoot.resolve(sha.substring(0, 2)).resolve(sha);
-                java.nio.file.Files.createDirectories(target.getParent());
-                if (!java.nio.file.Files.exists(target)) {
-                    java.nio.file.Files.write(target, att.bytes());
-                }
+                // TODO(M1): oss 后端这里是网络调用，飞书图片走进同步路径可能撞 3 秒超时；
+                // 接入真实附件量后评估把上传挪到异步 worker
+                StorageService.StoredObject stored =
+                        storage.store(att.bytes(), filename, att.mime(), sha);
                 attachments.insert(new AttachmentRepository.NewAttachment(
                         entryId, sha, filename, att.mime(), (long) att.bytes().length,
-                        target.toString(), att.sourceKey()));
+                        stored.key(), att.sourceKey()));
                 saved++;
             } catch (Exception e) {
                 log.warn("附件保存失败，entryId={} filename={}", entryId, att.filename(), e);

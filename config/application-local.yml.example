@@ -67,6 +67,21 @@ jotlog:
       mention-only: true
       receipt-text: "已记下，稍后补全"
 
+  # ---------- 附件存储 ----------
+  storage:
+    # local=本机磁盘（默认，不配 OSS 时行为与以前完全一致）；oss=阿里云 OSS
+    type: local
+    # 仅 local 用
+    attachment-dir: ./data/attachments
+    # 仅 type=oss 时需要，四项必须配齐，缺一项应用直接启动失败（fail fast）
+    # 建议用 RAM 子账号 AK（只授该 bucket 的 PutObject/GetObject/DeleteObject/ListObjects），
+    # 不用主账号 AK；bucket 保持私有，将来用预签名 URL 访问，不开公共读
+    oss:
+      endpoint: YOUR_OSS_ENDPOINT
+      access-key-id: YOUR_OSS_ACCESS_KEY_ID
+      access-key-secret: YOUR_OSS_ACCESS_KEY_SECRET
+      bucket-name: YOUR_OSS_BUCKET_NAME
+
 # ============================================================================
 # 附：服务器部署用的环境变量对照表
 #
@@ -91,7 +106,12 @@ jotlog:
 #   JOTLOG_AUTH_PASSWORD    初始密码，只在首次启动建号时用一次
 #   JOTLOG_JWT_SECRET       ≥32 字符。留空则每次启动随机生成，重启后要重新登录
 #   JOTLOG_DEV_CODE_TO_LOG  仅开发：true 时验证码只写日志不发信。生产必须 false
-#   JOTLOG_ATTACHMENT_DIR   附件目录，默认 ./data/attachments
+#   JOTLOG_STORAGE_TYPE     附件存储后端：local（默认）/ oss
+#   JOTLOG_ATTACHMENT_DIR   附件目录，默认 ./data/attachments（仅 local）
+#   JOTLOG_OSS_ENDPOINT     OSS endpoint，如 oss-cn-guangzhou.aliyuncs.com（仅 oss）
+#   JOTLOG_OSS_ACCESS_KEY_ID    OSS RAM 子账号 AK（仅 oss）
+#   JOTLOG_OSS_ACCESS_KEY_SECRET OSS RAM 子账号 SK（仅 oss）
+#   JOTLOG_OSS_BUCKET_NAME  OSS bucket 名（仅 oss）
 #   FEISHU_ENABLED          是否连飞书，默认 false
 #   FEISHU_APP_ID           飞书 App ID
 #   FEISHU_APP_SECRET       飞书 App Secret

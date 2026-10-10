@@ -1,8 +1,8 @@
 <template>
   <div class="mb-7">
     <div
-      class="card overflow-hidden transition-shadow"
-      :class="focused ? 'shadow-md ring-[3px] ring-accent-ring' : ''"
+      class="card overflow-hidden transition-colors"
+      :class="focused ? 'border-ink' : ''"
     >
       <textarea
         ref="box"
