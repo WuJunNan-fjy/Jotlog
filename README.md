@@ -64,7 +64,7 @@ mvn spring-boot:run
 
 ```bash
 cd web && npm install
-npm run dev          # http://localhost:5173，/api 代理到 8080
+npm run dev          # http://localhost:5190，/api 代理到 8095
 ```
 
 需要 Node 20+（Vite 6 的硬性要求）。

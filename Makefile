@@ -43,7 +43,7 @@ dist: web-build package ## 前端 + 后端，产出带界面的完整 jar
 	@echo "产物：$(JAR)（已包含 web/dist 的前端）"
 
 .PHONY: run
-run: ## 本地启动（后端 8080；前端另开 make web-dev）
+run: ## 本地启动（后端 8095；前端另开 make web-dev）
 	$(MVN) spring-boot:run
 
 .PHONY: verify
@@ -71,7 +71,7 @@ web-install: ## 安装前端依赖
 	cd $(WEB) && $(NPM) install
 
 .PHONY: web-dev
-web-dev: ## 前端开发服务器（5173），/api 代理到本机 8080
+web-dev: ## 前端开发服务器（5190），/api 代理到本机 8095
 	cd $(WEB) && $(NPM) run dev
 
 .PHONY: web-build

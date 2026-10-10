@@ -1,5 +1,6 @@
 server:
-  port: 8080
+  # 8080 常被本机其他项目占用，Jotlog 默认改用 8095，避免每次启动都要手动改
+  port: ${JOTLOG_PORT:8095}
   shutdown: graceful
 
 spring:
@@ -116,6 +117,10 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    mail:
+      # 邮件是可选通道，SMTP 没配时不该把整站健康拉成 DOWN
+      enabled: true
 
 logging:
   level:

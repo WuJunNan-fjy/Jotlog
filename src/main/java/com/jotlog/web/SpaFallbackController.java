@@ -61,13 +61,13 @@ public class SpaFallbackController {
                 <p><b>1. 本地开发</b>（前后端分开跑，改前端代码即时生效）</p>
                 <pre>cd web
                 npm install
-                npm run dev      # 访问 http://localhost:5173</pre>
+                npm run dev      # 访问 http://localhost:5190</pre>
                 <p><b>2. 打成单 jar</b>（前端产物会被塞进 static/）</p>
                 <pre>make dist
                 java -jar target/jotlog.jar</pre>
                 <p style="color:#8c959f;font-size:13px">
                   API 现在已经可用了，只是没有页面：
-                  <code>curl localhost:8080/actuator/health</code>
+                  <code>curl localhost:8095/actuator/health</code>
                 </p>
                 </body></html>
                 """;

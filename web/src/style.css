@@ -298,6 +298,15 @@
     cursor: not-allowed;
   }
 
+  /* 手机上字号必须 >=16px：iOS Safari 对小于 16px 的输入框，
+     一聚焦就整页放大，用户每点一个框页面就跳一次，体验极差。
+     桌面仍保持 15px 的紧凑观感 */
+  @media (max-width: 767px) {
+    .field {
+      font-size: 16px;
+    }
+  }
+
   /* 无边框输入：用在顶栏搜索、大标题这类"不该看出是个框"的地方 */
   .field-bare {
     background: transparent;

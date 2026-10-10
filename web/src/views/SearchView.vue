@@ -10,7 +10,7 @@
       <input
         ref="input"
         v-model="keyword"
-        class="field py-3 pr-11 pl-11 text-[15.5px]"
+        class="field py-3 pr-11 pl-11 text-[15.5px] max-[767px]:text-base"
         placeholder="搜原文、标题和 AI 摘要…"
         @input="schedule"
         @keydown.esc.prevent="clear"
