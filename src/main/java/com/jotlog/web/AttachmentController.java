@@ -1,6 +1,8 @@
 package com.jotlog.web;
 
+import com.jotlog.core.IngestService;
 import com.jotlog.repository.AttachmentRepository;
+import com.jotlog.repository.EntryRepository;
 import com.jotlog.storage.StorageNotFoundException;
 import com.jotlog.storage.StorageService;
 import org.springframework.core.io.InputStreamResource;
@@ -11,9 +13,11 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.net.URLEncoder;
@@ -35,16 +39,46 @@ public class AttachmentController {
 
     private final AttachmentRepository attachments;
     private final StorageService storage;
+    private final EntryRepository entries;
+    private final IngestService ingest;
 
-    public AttachmentController(AttachmentRepository attachments, StorageService storage) {
+    public AttachmentController(AttachmentRepository attachments,
+                                StorageService storage,
+                                EntryRepository entries,
+                                IngestService ingest) {
         this.attachments = attachments;
         this.storage = storage;
+        this.entries = entries;
+        this.ingest = ingest;
     }
 
     /** 某条记录的全部附件元数据。详情面板用它渲染图片墙和文件列表。 */
     @GetMapping("/entries/{id}/attachments")
     public Object list(@PathVariable long id) {
         return attachments.metaByEntry(id);
+    }
+
+    /**
+     * 网页端上传附件，挂到一条已存在的条目上（multipart/form-data，字段名 file）。
+     *
+     * 前端流程是先 POST /api/entries 拿到条目 id，再逐个调这里，
+     * 所以这里只认"追加附件"，不处理正文。
+     *
+     * 大小上限在 application.yml 的 spring.servlet.multipart 统一限制（默认 20MB），
+     * 超限由 ApiExceptionHandler 转成 413 友好提示，进不到这里。
+     */
+    @PostMapping("/entries/{id}/attachments")
+    public ResponseEntity<?> upload(@PathVariable long id, @RequestParam("file") MultipartFile file)
+            throws Exception {
+        if (entries.findById(id) == null) {
+            return ResponseEntity.notFound().build();
+        }
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "文件是空的"));
+        }
+        String sha = ingest.attachUploaded(
+                id, file.getOriginalFilename(), file.getContentType(), file.getBytes());
+        return ResponseEntity.ok(Map.of("ok", true, "sha", sha));
     }
 
     /**

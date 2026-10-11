@@ -13,10 +13,43 @@
         @input="autoGrow"
         @focus="focused = true"
         @blur="focused = false"
+        @paste="onPaste"
         @keydown.ctrl.enter.prevent="submit"
         @keydown.meta.enter.prevent="submit"
         @keydown.esc.prevent="blurBox"
       />
+
+      <!-- 待传附件：图片给缩略图，文件给横条 chip -->
+      <div v-if="pendingFiles.length" class="flex flex-wrap gap-2 px-3 pb-2.5">
+        <div
+          v-for="f in pendingFiles"
+          :key="f.key"
+          class="group relative flex items-center"
+          :class="f.isImage ? 'h-16 w-16' : ''"
+        >
+          <img
+            v-if="f.isImage"
+            :src="f.previewUrl ?? undefined"
+            class="h-16 w-16 rounded-[3px] border border-line object-cover"
+            alt=""
+          />
+          <span
+            v-else
+            class="chip max-w-[180px] bg-paper-sunken text-ink-2"
+          >
+            <Icon name="file" :size="12" />
+            <span class="truncate">{{ f.file.name }}</span>
+          </span>
+          <button
+            type="button"
+            class="btn-icon absolute -top-2 -right-2 h-5 w-5 rounded-full border border-line bg-paper text-ink-3"
+            aria-label="移除附件"
+            @click="removeAt(f.key)"
+          >
+            <Icon name="x" :size="11" />
+          </button>
+        </div>
+      </div>
 
       <div class="border-line-soft flex items-center gap-3 border-t px-3 py-2">
         <!-- 类型预览：还没提交就告诉用户"这条会被当成什么"。
@@ -25,6 +58,18 @@
           <Icon :name="preview.icon" :size="12" />
           {{ preview.label }}
         </span>
+
+        <!-- 添加附件：label 触发隐藏的 file input，手机上会直接弹出相册/文件选择 -->
+        <label class="btn-icon cursor-pointer" title="添加图片或文件">
+          <Icon name="paperclip" :size="16" />
+          <input
+            ref="fileInput"
+            type="file"
+            multiple
+            class="hidden"
+            @change="onPicked(($event.target as HTMLInputElement).files)"
+          />
+        </label>
 
         <span class="flex-1"></span>
 
@@ -52,6 +97,7 @@ import { api, ApiError } from '../api/http'
 import { useStatsStore } from '../stores/stats'
 import { useUiStore } from '../stores/ui'
 import { useToast } from '../composables/useToast'
+import { useComposeAttachments } from '../composables/useComposeAttachments'
 import { typeMeta } from '../utils/entryMeta'
 import Icon from './Icon.vue'
 
@@ -66,8 +112,19 @@ const busy = ref(false)
 const focused = ref(false)
 const error = ref('')
 const box = ref<HTMLTextAreaElement | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
+const {
+  files: pendingFiles,
+  addFiles,
+  removeAt,
+  clear,
+  uploadAll,
+  fallbackText,
+} = useComposeAttachments()
 
-const canSubmit = computed(() => text.value.trim().length > 0 && !busy.value)
+const canSubmit = computed(
+  () => (text.value.trim().length > 0 || pendingFiles.value.length > 0) && !busy.value,
+)
 
 /** 输入内容里出现 URL 时预先猜个类型，跟后端 Extractor 的口径大致对齐 */
 const preview = computed(() => {
@@ -99,17 +156,44 @@ function blurBox() {
   box.value?.blur()
 }
 
+/** 文件选择框选中后入队，并把 input 的值清掉，否则同一个文件再选一次不触发 change。 */
+function onPicked(list: FileList | null) {
+  if (!list) return
+  const rejected = addFiles(list)
+  rejected.forEach((r) => toast.push(r, 'danger'))
+  if (fileInput.value) fileInput.value.value = ''
+}
+
+/** 直接往输入框里粘贴截图（微信截图、手机相册粘贴）时，图片走附件而不是变成文件名。 */
+function onPaste(e: ClipboardEvent) {
+  const pasted = Array.from(e.clipboardData?.files ?? [])
+  if (pasted.length === 0) return
+  e.preventDefault()
+  addFiles(pasted).forEach((r) => toast.push(r, 'danger'))
+}
+
 async function submit() {
   if (!canSubmit.value) return
   busy.value = true
   error.value = ''
   try {
-    const result = await api.createEntry(text.value.trim())
+    // 没写字只发了图：用文件名拼一条正文，raw_input 不允许为空
+    const body = text.value.trim() || fallbackText()
+    const result = await api.createEntry(body)
+    let failed = 0
+    if (pendingFiles.value.length) {
+      failed = await uploadAll(result.id)
+    }
     text.value = ''
+    clear()
     await nextTick()
     autoGrow()
     stats.onCreated()
-    toast.push(result.duplicate ? '这条之前记过了，已再记一条' : '已记下', 'success')
+    if (failed > 0) {
+      toast.push(`已记下，但有 ${failed} 个附件没传上去`, 'danger')
+    } else {
+      toast.push(result.duplicate ? '这条之前记过了，已再记一条' : '已记下', 'success')
+    }
     emit('created')
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '没记成，稍后再试'

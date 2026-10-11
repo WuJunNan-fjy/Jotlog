@@ -82,6 +82,19 @@ java -jar target/jotlog.jar
 > `SET GLOBAL innodb_ft_enable_stopword = 0`，并写进 `my.cnf`。
 > 见 `scripts/init-db.sql`。
 
+### 6. 备份与导出
+
+笔记只有一份时等于没有备份，两条路：
+
+```bash
+# 服务器每天自动备份（mysqldump + gzip，默认留 14 天），见脚本里的 crontab 配置
+scripts/backup-db.sh
+# Windows 开发机同理：scripts/backup-db.ps1（配任务计划程序）
+```
+
+设置页里还有「导出 JSON / 导出 Markdown」，随时把全部记录（含归档、备注、附件清单）拉到本地。
+JSON 用于搬家和再导入，Markdown 用于归档翻看。
+
 ---
 
 ## 界面
@@ -121,7 +134,8 @@ java -jar target/jotlog.jar
 - [x] **邮箱验证码登录 + JWT + 会话表**
 - [x] **PWA 界面（时间线 / 搜索 / 设置）**
 - [x] **手机 + 电脑通用界面**（三档响应式、深色模式、详情双栏）
-- [ ] 图片 / 文件接收
+- [x] 图片 / 文件接收（飞书 + 网页端上传，内容寻址去重存储）
+- [x] 数据导出（JSON / Markdown）与每日自动备份脚本
 - [ ] AI 润色
 - [ ] 每日回顾
 

@@ -44,11 +44,51 @@
               class="field resize-none leading-relaxed"
               placeholder="记点什么…"
               @input="autoGrow"
+              @paste="onPaste"
               @keydown.ctrl.enter.prevent="submit"
               @keydown.meta.enter.prevent="submit"
             />
 
+            <!-- 待传附件：图片缩略图，文件横条 -->
+            <div v-if="pendingFiles.length" class="mt-2.5 flex flex-wrap gap-2">
+              <div
+                v-for="f in pendingFiles"
+                :key="f.key"
+                class="relative flex items-center"
+                :class="f.isImage ? 'h-16 w-16' : ''"
+              >
+                <img
+                  v-if="f.isImage"
+                  :src="f.previewUrl ?? undefined"
+                  class="h-16 w-16 rounded-[3px] border border-line object-cover"
+                  alt=""
+                />
+                <span v-else class="chip max-w-[200px] bg-paper-sunken text-ink-2">
+                  <Icon name="file" :size="12" />
+                  <span class="truncate">{{ f.file.name }}</span>
+                </span>
+                <button
+                  type="button"
+                  class="btn-icon absolute -top-2 -right-2 h-5 w-5 rounded-full border border-line bg-paper text-ink-3"
+                  aria-label="移除附件"
+                  @click="removeAt(f.key)"
+                >
+                  <Icon name="x" :size="11" />
+                </button>
+              </div>
+            </div>
+
             <div class="mt-3 flex items-center gap-3">
+              <label class="btn-icon cursor-pointer" title="添加图片或文件">
+                <Icon name="paperclip" :size="16" />
+                <input
+                  ref="fileInput"
+                  type="file"
+                  multiple
+                  class="hidden"
+                  @change="onPicked(($event.target as HTMLInputElement).files)"
+                />
+              </label>
               <span v-if="preview" class="chip bg-paper-sunken text-ink-3">
                 <Icon :name="preview.icon" :size="12" />
                 {{ preview.label }}
@@ -63,7 +103,7 @@
 
             <p v-if="error" class="mt-2 text-[13px] text-danger">{{ error }}</p>
             <p v-else class="mt-2.5 text-[12px] text-ink-3">
-              手机上是点「记下」，电脑上可以 Ctrl + Enter。
+              可以直接选图或粘贴截图；手机上点「记下」，电脑上可以 Ctrl + Enter。
             </p>
           </div>
         </div>
@@ -78,6 +118,7 @@ import { api, ApiError } from '../api/http'
 import { useStatsStore } from '../stores/stats'
 import { useToast } from '../composables/useToast'
 import { useBreakpoint } from '../composables/useBreakpoint'
+import { useComposeAttachments } from '../composables/useComposeAttachments'
 import { typeMeta } from '../utils/entryMeta'
 import Icon from './Icon.vue'
 
@@ -92,8 +133,19 @@ const busy = ref(false)
 const error = ref('')
 const visible = ref(false)
 const box = ref<HTMLTextAreaElement | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
+const {
+  files: pendingFiles,
+  addFiles,
+  removeAt,
+  clear,
+  uploadAll,
+  fallbackText,
+} = useComposeAttachments()
 
-const canSubmit = computed(() => text.value.trim().length > 0 && !busy.value)
+const canSubmit = computed(
+  () => (text.value.trim().length > 0 || pendingFiles.value.length > 0) && !busy.value,
+)
 
 const preview = computed(() => {
   const url = /(https?:\/\/[^\s]+)/i.exec(text.value.trim())?.[1]
@@ -115,14 +167,37 @@ function autoGrow() {
   el.style.height = `${Math.min(el.scrollHeight, 8 * 24 + 16)}px`
 }
 
+function onPicked(list: FileList | null) {
+  if (!list) return
+  const rejected = addFiles(list)
+  rejected.forEach((r) => toast.push(r, 'danger'))
+  if (fileInput.value) fileInput.value.value = ''
+}
+
+function onPaste(e: ClipboardEvent) {
+  const pasted = Array.from(e.clipboardData?.files ?? [])
+  if (pasted.length === 0) return
+  e.preventDefault()
+  addFiles(pasted).forEach((r) => toast.push(r, 'danger'))
+}
+
 async function submit() {
   if (!canSubmit.value) return
   busy.value = true
   error.value = ''
   try {
-    const result = await api.createEntry(text.value.trim())
+    const body = text.value.trim() || fallbackText()
+    const result = await api.createEntry(body)
+    let failed = 0
+    if (pendingFiles.value.length) {
+      failed = await uploadAll(result.id)
+    }
+    if (failed > 0) {
+      toast.push(`已记下，但有 ${failed} 个附件没传上去`, 'danger')
+    } else {
+      toast.push(result.duplicate ? '这条之前记过了，已再记一条' : '已记下', 'success')
+    }
     stats.onCreated()
-    toast.push(result.duplicate ? '这条之前记过了，已再记一条' : '已记下', 'success')
     close(true)
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '没记成，稍后再试'
@@ -133,6 +208,8 @@ async function submit() {
 
 function close(saved = false) {
   visible.value = false
+  // 取消时待传文件没有提交，也要把本地预览的 objectURL 释放掉
+  clear()
   setTimeout(() => emit('close', saved), 200)
 }
 </script>

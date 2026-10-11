@@ -1,6 +1,7 @@
 package com.jotlog.storage;
 
 import java.io.InputStream;
+import java.util.List;
 
 /**
  * 附件存储的唯一门面。
@@ -34,6 +35,20 @@ public interface StorageService {
      * @throws StorageException         读取失败
      */
     InputStream open(StoredObject object);
+
+    /**
+     * 列举存储后端里的全部对象 key（形如 {@code 1a/1a2b...}）。
+     * 只给附件垃圾回收用：与 attachments 表的 storage_path 对账，找出孤儿对象。
+     */
+    List<String> listKeys();
+
+    /**
+     * 删除一个对象。供垃圾回收调用，业务路径不允许直接删 —— 内容寻址对象
+     * 可能被多条记录共享，只有确认全库没有任何 attachments 行引用时才能删。
+     *
+     * @throws StorageException key 非法或删除失败
+     */
+    void delete(String key);
 
     /** 存储对象。key 是数据库里 storage_path 的语义；size 用于 Content-Length。 */
     record StoredObject(String key, long size) {

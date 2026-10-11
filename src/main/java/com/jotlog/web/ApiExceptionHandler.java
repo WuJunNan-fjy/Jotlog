@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.List;
 import java.util.Map;
@@ -47,6 +48,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<?> handleMissingParam(MissingServletRequestParameterException e) {
         return body(HttpStatus.BAD_REQUEST, "缺少参数：" + e.getParameterName());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<?> handleUploadTooLarge(MaxUploadSizeExceededException e) {
+        // 不回传 e.getMessage()：Tomcat 的原文会带出具体配置字节数，没必要给调用方看
+        return body(HttpStatus.PAYLOAD_TOO_LARGE, "文件太大了，单个文件上限 20MB");
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

@@ -1,0 +1,40 @@
+# ============================================================================
+# Jotlog 的 Nginx 配置模板（线上 https://你的域名/jotlog/ 子路径部署）
+#
+# 用法：
+#   sudo cp scripts/nginx.conf.example /etc/nginx/conf.d/jotlog.conf
+#   改好 server_name 和证书路径后 sudo nginx -t && sudo systemctl reload nginx
+#
+# 关键：proxy_pass 末尾必须带 "/"。
+#   Nginx 会用它剥掉 location 的 /jotlog 前缀再转给后端：
+#     /jotlog/                 -> http://127.0.0.1:8095/
+#     /jotlog/api/entries      -> http://127.0.0.1:8095/api/entries
+#     /jotlog/assets/index.js  -> http://127.0.0.1:8095/assets/index.js
+#   不带这个斜杠前缀就剥不掉，后端所有接口都会 404。
+# ============================================================================
+
+server {
+    listen 80;
+    server_name junan.cloud;   # 改成你的域名
+
+    # 附件上传上限，要和后端 spring.servlet.multipart.max-request-size 对齐（后端 22MB）
+    client_max_body_size 25m;
+
+    location /jotlog/ {
+        proxy_pass http://127.0.0.1:8095/;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # 附件下载/导出可能是大响应，关掉缓冲让它边生成边发
+        proxy_buffering off;
+        proxy_read_timeout 120s;
+    }
+}
+
+# 用 certbot 签证书后，它会自动把上面这份改写成 443 + 自动跳转，
+# 不用手写 ssl_certificate；手动配的话记得同样保留 proxy_pass 末尾的斜杠。

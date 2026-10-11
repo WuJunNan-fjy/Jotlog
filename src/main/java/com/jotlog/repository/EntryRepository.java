@@ -51,6 +51,9 @@ public interface EntryRepository {
     /** 首页顶部那几个数字。 */
     Stats stats();
 
+    /** 全量条目（含归档、备注 note），按时间正序。只给数据导出用，列表接口不许碰它。 */
+    List<ExportRow> exportAll();
+
     record Stats(long total, long today, long week, long starred, long archived, long pendingAi) {
     }
 
@@ -97,6 +100,28 @@ public interface EntryRepository {
             boolean archived,
             String imageSha,
             long attachmentCount
+    ) {
+    }
+
+    /**
+     * 导出用的完整行。比列表 Row 多了备注 note，字段平铺、不带附件聚合，
+     * 附件清单由导出接口另行一次性查询后在内存里关联。
+     */
+    record ExportRow(
+            long id,
+            String source,
+            String entryType,
+            String rawInput,
+            String url,
+            String domain,
+            String title,
+            String aiSummary,
+            String aiTags,
+            String aiStatus,
+            String note,
+            boolean starred,
+            boolean archived,
+            String createdAt
     ) {
     }
 }

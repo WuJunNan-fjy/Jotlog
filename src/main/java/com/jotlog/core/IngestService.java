@@ -128,6 +128,62 @@ public class IngestService {
         }
     }
 
+    /**
+     * 网页端上传的附件挂到一条【已存在】的条目上。
+     *
+     * 与飞书路径共用同一套「算 sha → 内容寻址存储 → 元数据落库」，
+     * source_key 统一记 "web"，以后排查"这张图从哪来的"有据可查。
+     *
+     * @return 附件 sha256；同内容已存过则只补关联行，不重复写对象
+     */
+    @Transactional
+    public String attachUploaded(long entryId, String rawFilename, String contentType, byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            throw new IllegalArgumentException("文件内容为空");
+        }
+        String sha = sha256(bytes);
+        String filename = sanitizeFilename(rawFilename, sha);
+        String mime = sanitizeMime(contentType);
+
+        StorageService.StoredObject stored = storage.store(bytes, filename, mime, sha);
+        attachments.insert(new AttachmentRepository.NewAttachment(
+                entryId, sha, filename, mime, (long) bytes.length, stored.key(), "web"));
+        log.info("网页附件已保存 entryId={} filename={} size={} sha={}",
+                entryId, filename, bytes.length, sha.substring(0, 12));
+        return sha;
+    }
+
+    /**
+     * 文件名清洗：去掉客户端可能带来的路径分隔符（Windows 反斜杠和 POSIX 斜杠都防），
+     * 剔控制字符，超长截断。绝不能让 filename 携带路径语义 —— 虽然存储 key 与文件名
+     * 无关，Content-Disposition 里也会再编码，但脏数据不该进库。
+     */
+    private static String sanitizeFilename(String raw, String fallbackSha) {
+        if (raw == null) {
+            return fallbackSha;
+        }
+        String name = raw.trim();
+        int slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        if (slash >= 0) {
+            name = name.substring(slash + 1);
+        }
+        name = name.replaceAll("[\\p{Cntrl}]", "").trim();
+        if (name.isEmpty()) {
+            return fallbackSha;
+        }
+        // 512 是库里的列宽，留足余量给编码与扩展名之外的开销
+        return name.length() > 200 ? name.substring(0, 200) : name;
+    }
+
+    /** 浏览器上报的 Content-Type 不可信，但这里只用于存储元数据；raw 端点还有 inline 白名单兜底。 */
+    private static String sanitizeMime(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return "application/octet-stream";
+        }
+        String mime = contentType.split(";", 2)[0].trim().toLowerCase();
+        return mime.matches("[\\w.+-]+/[\\w.+-]+") ? mime : "application/octet-stream";
+    }
+
     public record IngestResult(long id, boolean duplicate) {
     }
 

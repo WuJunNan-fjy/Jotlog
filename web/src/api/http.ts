@@ -158,4 +158,75 @@ export const api = {
 
   changeEmail: (code: string, email: string) =>
     request<{ ok: boolean }>('/api/auth/email', { method: 'PUT', body: { code, email } }),
+
+  /**
+   * 上传附件到一条已存在的条目。
+   *
+   * 必须用 FormData 且【不能】手动设 Content-Type —— 浏览器要自己写
+   * multipart boundary，设成 application/json 服务端就解析不出文件了。
+   */
+  uploadAttachment: async (entryId: number, file: File): Promise<{ ok: boolean; sha: string }> => {
+    const form = new FormData()
+    form.append('file', file)
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE}/api/entries/${entryId}/attachments`, {
+        method: 'POST',
+        headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+        body: form,
+      })
+    } catch {
+      throw new ApiError(0, '连不上服务器，文件没传上去')
+    }
+    if (response.status === 401) {
+      unauthorizedHandler?.()
+      throw new ApiError(401, '登录已失效，请重新登录')
+    }
+    const text = await response.text()
+    const payload = text ? JSON.parse(text) : null
+    if (!response.ok) {
+      throw new ApiError(response.status, payload?.error ?? `上传失败（${response.status}）`)
+    }
+    return payload
+  },
+}
+
+/**
+ * 下载全量导出（JSON / Markdown）。
+ *
+ * 和附件下载同一个原因：导出接口在 JWT 之后，<a href> 带不上 Authorization，
+ * 先 fetch 成 blob 再用临时链接触发另存。
+ */
+export async function downloadExport(format: 'json' | 'markdown'): Promise<void> {
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}/api/export?format=${format}`, {
+      headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+    })
+  } catch {
+    throw new ApiError(0, '连不上服务器，导出失败')
+  }
+  if (response.status === 401) {
+    unauthorizedHandler?.()
+    throw new ApiError(401, '登录已失效，请重新登录')
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, `导出失败（${response.status}）`)
+  }
+
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  // 后端给了 Content-Disposition，blob 跨 origin 拿不到这个头，名字自己按格式定
+  const stamp = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const name =
+    `jotlog-export-${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}` +
+    (format === 'json' ? '.json' : '.md')
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }

@@ -124,6 +124,14 @@
     <template v-else-if="name === 'refresh'">
       <path d="M20 12a8 8 0 11-2.6-5.9M20 4.5V10h-5.5" />
     </template>
+    <template v-else-if="name === 'paperclip'">
+      <path
+        d="M21.4 11l-9.2 9.2a6 6 0 01-8.5-8.5l9.2-9.2a4 4 0 015.7 5.7l-9.2 9.2a2 2 0 01-2.9-2.9l8.5-8.5"
+      />
+    </template>
+    <template v-else-if="name === 'download'">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+    </template>
 
     <!-- 状态 / 主题 -->
     <template v-else-if="name === 'mail'">

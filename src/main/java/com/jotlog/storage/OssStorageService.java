@@ -3,6 +3,8 @@ package com.jotlog.storage;
 import com.aliyun.oss.ClientException;
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
+import com.aliyun.oss.model.ListObjectsRequest;
+import com.aliyun.oss.model.ObjectListing;
 import com.aliyun.oss.model.ObjectMetadata;
 import com.aliyun.oss.model.OSSObject;
 import com.jotlog.config.StorageProperties;
@@ -14,6 +16,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 阿里云 OSS 存储。配置 {@code jotlog.storage.type=oss} 时启用。
@@ -103,6 +107,37 @@ public class OssStorageService implements StorageService {
     @PreDestroy
     public void shutdown() {
         ossClient.shutdown();
+    }
+
+    @Override
+    public List<String> listKeys() {
+        // 只列两位十六进制前缀下的对象，且最终仍要过 key 形状校验 ——
+        // bucket 万一与别的应用共用，也不会把别人的对象当成孤儿删掉
+        List<String> keys = new ArrayList<>();
+        String marker = null;
+        do {
+            ListObjectsRequest request = new ListObjectsRequest(bucket);
+            request.setMarker(marker);
+            ObjectListing listing = ossClient.listObjects(request);
+            listing.getObjectSummaries().forEach(o -> keys.add(o.getKey()));
+            marker = listing.isTruncated() ? listing.getNextMarker() : null;
+        } while (marker != null && !marker.isEmpty());
+        return keys;
+    }
+
+    @Override
+    public void delete(String key) {
+        if (key == null || !key.matches("[0-9a-f]{2}/[0-9a-f]{64}")) {
+            throw new StorageException("非法的存储 key：" + key);
+        }
+        try {
+            ossClient.deleteObject(bucket, key);
+        } catch (com.aliyun.oss.OSSException oe) {
+            log.warn("OSS 删除被拒绝 key={} code={} requestId={}", key, oe.getErrorCode(), oe.getRequestId());
+            throw new StorageException("附件 OSS 删除失败：" + key, oe);
+        } catch (ClientException ce) {
+            throw new StorageException("附件 OSS 删除失败（客户端错误）：" + key, ce);
+        }
     }
 
     private static String keyOf(String sha256) {

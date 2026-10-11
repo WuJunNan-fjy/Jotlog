@@ -246,6 +246,34 @@ public class JdbcEntryRepository implements EntryRepository {
                 rs.getLong("pending_ai")));
     }
 
+    @Override
+    public List<EntryRepository.ExportRow> exportAll() {
+        // 不走 COLUMNS：导出要 note，且不需要两个附件聚合子查询（附件另查一次分组）
+        return jdbc.query("""
+                SELECT id, source, entry_type, raw_input, url, domain,
+                       title, ai_summary, ai_tags, ai_status, note,
+                       starred, archived, created_at
+                FROM entries
+                ORDER BY created_at ASC, id ASC
+                """, (rs, i) -> new EntryRepository.ExportRow(
+                rs.getLong("id"),
+                rs.getString("source"),
+                rs.getString("entry_type"),
+                rs.getString("raw_input"),
+                rs.getString("url"),
+                rs.getString("domain"),
+                rs.getString("title"),
+                rs.getString("ai_summary"),
+                rs.getString("ai_tags"),
+                rs.getString("ai_status"),
+                rs.getString("note"),
+                rs.getBoolean("starred"),
+                rs.getBoolean("archived"),
+                rs.getTimestamp("created_at") == null
+                        ? null
+                        : rs.getTimestamp("created_at").toLocalDateTime().toString()));
+    }
+
     /**
      * AI 结果回写。
      *

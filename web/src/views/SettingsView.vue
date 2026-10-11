@@ -113,6 +113,25 @@
         <p v-else-if="emailNotice" class="mt-2 text-[13px] text-accent">{{ emailNotice }}</p>
       </section>
 
+      <!-- 数据 -->
+      <section class="card p-5">
+        <h2 class="t-rule mb-1">数据</h2>
+        <p class="mb-4 text-[12px] leading-relaxed text-ink-3">
+          导出这份实例里的全部记录（含归档和备注）。JSON 适合备份和搬家，Markdown 适合归档翻看。
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <button class="btn btn-ghost" :disabled="!!exporting" @click="doExport('json')">
+            <Icon name="download" :size="15" />
+            {{ exporting === 'json' ? '导出中…' : '导出 JSON' }}
+          </button>
+          <button class="btn btn-ghost" :disabled="!!exporting" @click="doExport('markdown')">
+            <Icon name="download" :size="15" />
+            {{ exporting === 'markdown' ? '导出中…' : '导出 Markdown' }}
+          </button>
+        </div>
+        <p v-if="exportError" class="mt-2 text-[13px] text-danger">{{ exportError }}</p>
+      </section>
+
       <!-- 快捷键 -->
       <section class="card p-5">
         <h2 class="t-rule mb-4">快捷键</h2>
@@ -159,7 +178,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ApiError } from '../api/http'
+import { ApiError, downloadExport } from '../api/http'
 import { useAuthStore } from '../stores/auth'
 import { useTheme } from '../composables/useTheme'
 import type { ThemeMode } from '../composables/useTheme'
@@ -276,5 +295,23 @@ async function submitEmail() {
 async function doLogout() {
   await auth.logout()
   await router.replace('/login')
+}
+
+// ---------- 数据导出 ----------
+const exporting = ref<'' | 'json' | 'markdown'>('')
+const exportError = ref('')
+
+async function doExport(format: 'json' | 'markdown') {
+  if (exporting.value) return
+  exportError.value = ''
+  exporting.value = format
+  try {
+    await downloadExport(format)
+    toast.push('导出已开始，看浏览器下载', 'success')
+  } catch (e) {
+    exportError.value = e instanceof ApiError ? e.message : '导出失败'
+  } finally {
+    exporting.value = ''
+  }
 }
 </script>

@@ -7,8 +7,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * 本机磁盘存储。默认实现，没配 OSS 时系统行为与改造前完全一致。
@@ -23,6 +27,9 @@ public class LocalStorageService implements StorageService {
     private static final Logger log = LoggerFactory.getLogger(LocalStorageService.class);
 
     private final Path root;
+
+    /** 合法对象 key：两位十六进制前缀 + / + 64 位 sha。列举和删除都靠它做形状校验。 */
+    private static final Pattern KEY_SHAPE = Pattern.compile("[0-9a-f]{2}/[0-9a-f]{64}");
 
     public LocalStorageService(StorageProperties properties) {
         this.root = properties.getAttachmentPath().toAbsolutePath().normalize();
@@ -68,6 +75,46 @@ public class LocalStorageService implements StorageService {
     /** sha → 落盘路径。 */
     private Path resolve(String sha256) {
         return root.resolve(keyOf(sha256));
+    }
+
+    @Override
+    public List<String> listKeys() {
+        if (!Files.isDirectory(root)) {
+            return List.of();
+        }
+        try (Stream<Path> walk = Files.walk(root, 2)) {
+            return walk
+                    .filter(Files::isRegularFile)
+                    .map(p -> root.relativize(p.toAbsolutePath().normalize()).toString().replace('\\', '/'))
+                    .filter(k -> KEY_SHAPE.matcher(k).matches())
+                    .toList();
+        } catch (Exception e) {
+            throw new StorageException("枚举附件目录失败：" + root, e);
+        }
+    }
+
+    @Override
+    public void delete(String key) {
+        if (key == null || !KEY_SHAPE.matcher(key).matches()) {
+            throw new StorageException("非法的存储 key：" + key);
+        }
+        Path file = root.resolve(key).toAbsolutePath().normalize();
+        if (!file.startsWith(root)) {
+            throw new StorageException("非法的存储位置：" + key);
+        }
+        try {
+            boolean deleted = Files.deleteIfExists(file);
+            if (deleted) {
+                // 顺手删掉空掉的两位前缀目录；目录非空会抛 DirectoryNotEmptyException，忽略即可
+                try {
+                    Files.deleteIfExists(file.getParent());
+                } catch (DirectoryNotEmptyException ignored) {
+                    // 还有别的附件，目录保留
+                }
+            }
+        } catch (Exception e) {
+            throw new StorageException("附件删除失败：" + key, e);
+        }
     }
 
     private static String keyOf(String sha256) {

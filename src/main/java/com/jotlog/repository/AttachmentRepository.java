@@ -67,6 +67,35 @@ public class AttachmentRepository {
     public record Meta(long id, String sha256, String filename, String mime, long sizeBytes) {
     }
 
+    /**
+     * 全库仍被引用的存储 key（DISTINCT）。
+     * 垃圾回收拿它与存储后端实际对象对账：同 sha 被多条记录共享只算一个引用。
+     */
+    public List<String> allReferencedKeys() {
+        return jdbc.queryForList("""
+                SELECT DISTINCT storage_path FROM attachments
+                WHERE storage_path IS NOT NULL AND storage_path <> ''
+                """, String.class);
+    }
+
+    /** 全部附件元数据（带所属条目），数据导出用。一次查完在内存分组，避免 N+1。 */
+    public List<ExportAttachment> allForExport() {
+        return jdbc.query("""
+                SELECT entry_id, sha256, filename, mime, size_bytes
+                FROM attachments ORDER BY entry_id, id
+                """, (rs, i) -> new ExportAttachment(
+                rs.getLong("entry_id"),
+                rs.getString("sha256"),
+                rs.getString("filename"),
+                rs.getString("mime"),
+                rs.getLong("size_bytes")));
+    }
+
+    /** 导出用的附件行。 */
+    public record ExportAttachment(long entryId, String sha256, String filename,
+                                   String mime, long sizeBytes) {
+    }
+
     /** 含存储位置的完整信息，只有服务端读内容用，不出去。 */
     public record Stored(long id, String sha256, String filename, String mime,
                          long sizeBytes, String storagePath) {

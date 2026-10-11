@@ -7,14 +7,15 @@ spring:
   application:
     name: jotlog
 
-  # 默认激活 local。config/application-local.yml 会覆盖下面的占位符默认值。
-  # 部署到服务器时用 JOTLOG_PROFILE=prod 或直接 --spring.profiles.active=prod 改。
+  # 默认激活 local（开发）：application-local.yml 覆盖下面的占位符。
+  # 部署到服务器时用 JOTLOG_PROFILE=prod 或 --spring.profiles.active=prod，
+  # 真值读 application-prod.yml（两个文件都已 gitignore）。
   profiles:
     active: ${JOTLOG_PROFILE:local}
 
   datasource:
     # 这个文件会进 Git，所以这里只放占位符，不写真值。
-    # 真值放 config/application-local.yml（已 gitignore），它会自动覆盖这里。
+    # 真值放 application-local.yml / application-prod.yml（均已 gitignore），会自动覆盖这里。
     #
     # ⚠️ characterEncoding 只能写 UTF-8，不能写 utf8mb4。
     #    utf8mb4 是 MySQL 的字符集名，但这个参数走的是 Java 的 String.getBytes()，
@@ -60,6 +61,13 @@ spring:
           timeout: 5000
           writetimeout: 5000
 
+  # 网页端附件上传。默认单文件 1MB 太小（手机截图都不止），放到 20MB。
+  # request 比 file 略大：multipart 包装本身有开销。
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 22MB
+
   jackson:
     default-property-inclusion: non_null
     serialization:
@@ -93,7 +101,7 @@ jotlog:
     feishu:
       # 改成 true 才会连飞书。没配凭证时保持 false，应用仍能正常启动。
       enabled: ${FEISHU_ENABLED:false}
-      # 真值放 config/application-local.yml。App Secret 一旦进 Git 就永久泄露。
+      # 真值放 application-local/prod.yml。App Secret 一旦进 Git 就永久泄露。
       app-id: ${FEISHU_APP_ID:}
       app-secret: ${FEISHU_APP_SECRET:}
       # 群聊里只响应 @ 机器人的消息
@@ -103,6 +111,12 @@ jotlog:
     # local=写本机磁盘（默认）；oss=阿里云 OSS。切 oss 必须配齐下面四项
     type: ${JOTLOG_STORAGE_TYPE:local}
     attachment-dir: ${JOTLOG_ATTACHMENT_DIR:./data/attachments}
+    gc:
+      # 附件垃圾回收：每天凌晨把存储后端里已无任何条目引用的对象删掉。
+      # 条目删除时文件不能立即删（同 sha 可能被多条记录共享），统一靠它对账回收。
+      # 想彻底关掉设 JOTLOG_STORAGE_GC_ENABLED=false。
+      enabled: ${JOTLOG_STORAGE_GC_ENABLED:true}
+      cron: ${JOTLOG_STORAGE_GC_CRON:0 40 3 * * ?}
     oss:
       endpoint: ${JOTLOG_OSS_ENDPOINT:}
       access-key-id: ${JOTLOG_OSS_ACCESS_KEY_ID:}
