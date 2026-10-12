@@ -316,64 +316,31 @@ public class FeishuChannel implements ChannelAdapter {
             while (total < 0 || received < total) {
                 // 首片时 total 未知，窗口右边界按固定片长算；拿到 Content-Range 后会被总长收敛
                 long end = Math.min(received + RANGE_CHUNK, total > 0 ? total : Long.MAX_VALUE) - 1;
-                Map<String, List<String>> headers = new HashMap<>();
-                headers.put("Range", List.of("bytes=" + received + "-" + end));
-                RequestOptions options = RequestOptions.newBuilder()
-                        .supportDownLoad()
-                        .headers(headers)
-                        .build();
+                RangePart part = fetchRangeWithRetry(config, req, received, end);
 
-                RawResponse resp = Transport.send(
-                        config, options, "GET", RESOURCE_PATH,
-                        Set.of(AccessTokenType.Tenant), req);
-
-                int status = resp.getStatusCode();
-                byte[] body = resp.getBody() == null ? new byte[0] : resp.getBody();
-
-                if (status == 200) {
+                if (part.status == 200) {
                     // 服务端没按 Range 切（小文件或网关行为）：这一包就是完整内容
-                    sink.write(body);
-                    received += body.length;
+                    sink.write(part.body);
+                    received += part.body.length;
                     total = received;
                     if (fileName == null) {
-                        fileName = resp.getFileName();
+                        fileName = part.fileName;
                     }
                     break;
                 }
-                if (status == 206) {
-                    if (body.length == 0) {
-                        // 没有终止条件保护会死循环，空片直接判失败
-                        throw new IOException("分片下载返回空内容 start=" + received);
-                    }
-                    sink.write(body);
-                    received += body.length;
-                    if (fileName == null) {
-                        fileName = resp.getFileName();
-                    }
-                    if (total < 0) {
-                        total = parseTotalFromContentRange(header(resp, "Content-Range"));
-                        if (total <= 0) {
-                            throw new IOException("无法从 Content-Range 解析资源总大小");
-                        }
-                    }
-                    sink.flush();
-                    continue;
+                // 206：part.body 非空由 fetchRangeWithRetry 保证
+                sink.write(part.body);
+                received += part.body.length;
+                if (fileName == null) {
+                    fileName = part.fileName;
                 }
-
-                // 其余状态码：飞书把错误码放在 JSON body（code/msg）
-                String respBody = new String(body, StandardCharsets.UTF_8);
-                int code = -1;
-                String msg = "";
-                try {
-                    var node = mapper.readTree(respBody);
-                    code = node.path("code").asInt(-1);
-                    msg = node.path("msg").asText("");
-                } catch (Exception ignored) {
-                    // body 不是 JSON 也无所谓，下面把原始片段带进异常
+                if (total < 0) {
+                    total = parseTotalFromContentRange(part.contentRange);
+                    if (total <= 0) {
+                        throw new IOException("无法从 Content-Range 解析资源总大小");
+                    }
                 }
-                throw new IOException("分片下载被拒绝 http=" + status
-                        + " code=" + code + " msg=" + msg
-                        + " body=" + respBody.substring(0, Math.min(respBody.length(), 200)));
+                sink.flush();
             }
         } catch (IOException e) {
             throw e;
@@ -385,6 +352,106 @@ public class FeishuChannel implements ChannelAdapter {
         log.info("大资源分片下载完成 messageId={} fileKey={} size={}",
                 messageId, fileKey, received);
         return fileName;
+    }
+
+    /** 单片最多尝试次数（含首次）。家用宽带上行/飞书网关偶发抖动常见，3 次基本能跨过。 */
+    private static final int RANGE_MAX_ATTEMPTS = 3;
+
+    /**
+     * 获取单个 Range 分片，带有限重试。
+     *
+     * 关键安全点：重试只发生在"本片字节尚未写入 sink"之前 ——
+     * RawResponse 把整片读成 byte[] 返回，只有状态码/内容校验通过才回到调用方落盘，
+     * 因此任何失败重试都不会让下载文件里混入半截分片。
+     *
+     * 不重试的情况：4xx 业务错误（鉴权 234002、不可见 234040 等），
+     * 重试只会得到同样结果，包成 {@link NonRetryableRangeException} 立即终止整次下载。
+     * 可重试：网络异常、429、5xx、206 空体；退避 0.5s/1s。
+     */
+    private RangePart fetchRangeWithRetry(Config config, GetMessageResourceReq req,
+                                          long start, long end) throws IOException {
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("Range", List.of("bytes=" + start + "-" + end));
+
+        Exception lastError = null;
+        for (int attempt = 1; attempt <= RANGE_MAX_ATTEMPTS; attempt++) {
+            try {
+                RequestOptions options = RequestOptions.newBuilder()
+                        .supportDownLoad()
+                        .headers(headers)
+                        .build();
+                RawResponse resp = Transport.send(
+                        config, options, "GET", RESOURCE_PATH,
+                        Set.of(AccessTokenType.Tenant), req);
+
+                int status = resp.getStatusCode();
+                byte[] body = resp.getBody() == null ? new byte[0] : resp.getBody();
+
+                if (status == 200 || status == 206) {
+                    if (body.length == 0) {
+                        // 空片没有终止条件保护会死循环，按可重试的瞬时异常处理
+                        throw new IOException("分片下载返回空内容 start=" + start + " status=" + status);
+                    }
+                    return new RangePart(status, body,
+                            resp.getFileName(), header(resp, "Content-Range"));
+                }
+
+                IOException apiError = rangeApiError(status, body);
+                if (status == 429 || status >= 500) {
+                    lastError = apiError; // 限流/服务端错误：退避后重试
+                } else {
+                    // 4xx 业务错误：重试无意义，立即终止
+                    throw new NonRetryableRangeException(apiError.getMessage());
+                }
+            } catch (NonRetryableRangeException e) {
+                throw e;
+            } catch (Exception e) {
+                lastError = e;
+            }
+
+            if (attempt < RANGE_MAX_ATTEMPTS) {
+                log.warn("分片下载失败，准备重试 start={} attempt={}/3 cause={}",
+                        start, attempt, lastError == null ? "未知错误" : lastError.getMessage());
+                try {
+                    // 指数退避：0.5s、1s
+                    Thread.sleep(500L * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("分片下载等待重试时被中断", ie);
+                }
+            }
+        }
+
+        throw new IOException("分片下载重试 " + RANGE_MAX_ATTEMPTS
+                + " 次仍失败 start=" + start, lastError);
+    }
+
+    /** 把飞书错误响应（JSON：code/msg）解析成带诊断信息的异常。 */
+    private IOException rangeApiError(int status, byte[] body) {
+        String respBody = new String(body, StandardCharsets.UTF_8);
+        int code = -1;
+        String msg = "";
+        try {
+            var node = mapper.readTree(respBody);
+            code = node.path("code").asInt(-1);
+            msg = node.path("msg").asText("");
+        } catch (Exception ignored) {
+            // body 不是 JSON 也无所谓，下面把原始片段带进异常
+        }
+        return new IOException("分片下载被拒绝 http=" + status
+                + " code=" + code + " msg=" + msg
+                + " body=" + respBody.substring(0, Math.min(respBody.length(), 200)));
+    }
+
+    /** 单片结果。status 只可能是 200（整包返回）或 206（分片）。 */
+    private record RangePart(int status, byte[] body, String fileName, String contentRange) {
+    }
+
+    /** 业务级 4xx 错误，重试无意义，用于直接穿透重试循环。 */
+    private static class NonRetryableRangeException extends IOException {
+        NonRetryableRangeException(String message) {
+            super(message);
+        }
     }
 
     /** 响应头大小写不敏感取值（OkHttp 多 map 里头名可能是小写）。 */
