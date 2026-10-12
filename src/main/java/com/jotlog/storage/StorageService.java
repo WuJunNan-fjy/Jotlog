@@ -1,6 +1,7 @@
 package com.jotlog.storage;
 
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -27,6 +28,18 @@ public interface StorageService {
      * @return 已存储对象（key 落库到 attachments.storage_path）
      */
     StoredObject store(byte[] bytes, String filename, String mime, String sha256);
+
+    /**
+     * 以流式方式存储一个已落在本地临时文件的大附件，内容不读进堆。
+     * 同 sha 已存在时不重复写入；无论写入与否，临时文件都由调用方负责删除。
+     *
+     * 供飞书 ≥100MB 附件的 Range 分片下载链路使用：OSS 后端走分片上传，
+     * local 后端直接搬运文件。
+     *
+     * @param source 本地临时文件（绝对路径）
+     * @param size   文件字节数，用于 Content-Length / OSS 分片元数据
+     */
+    StoredObject storeFile(Path source, long size, String filename, String mime, String sha256);
 
     /**
      * 按 key 打开附件内容流。调用方负责关闭。

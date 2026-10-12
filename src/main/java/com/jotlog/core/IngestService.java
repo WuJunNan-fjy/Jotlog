@@ -11,6 +11,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
@@ -125,6 +128,39 @@ public class IngestService {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data));
         } catch (Exception e) {
             throw new IllegalStateException("SHA-256 不可用", e);
+        }
+    }
+
+    /**
+     * 飞书 ≥100MB 大附件的补挂：内容已由调用方分片下载到临时文件，
+     * 这里把它流式搬进存储后端并写元数据，全程不把文件读进堆。
+     *
+     * 与 {@link #saveAttachments} 的 byte[] 路径共用同一张表和内容寻址规则，
+     * 区别只在"内容从哪来"。无论成败都删除临时文件 —— 它只是下载中转。
+     *
+     * @param sha 调用方在下载时用 DigestOutputStream 边写边算好的 sha256
+     * @return 1=已挂接；0=失败（仅告警，不拖垮主记录）
+     */
+    @Transactional
+    public int saveAttachmentFile(long entryId, String filename, String mime,
+                                  Path tempFile, long size, String sha, String sourceKey) {
+        try {
+            StorageService.StoredObject stored =
+                    storage.storeFile(tempFile, size, filename, mime, sha);
+            attachments.insert(new AttachmentRepository.NewAttachment(
+                    entryId, sha, filename, mime, size, stored.key(), sourceKey));
+            log.info("飞书大附件已保存 entryId={} filename={} size={} sha={}",
+                    entryId, filename, size, sha.substring(0, 12));
+            return 1;
+        } catch (Exception e) {
+            log.warn("大附件保存失败，entryId={} filename={}", entryId, filename, e);
+            return 0;
+        } finally {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (IOException e) {
+                log.warn("临时附件文件删除失败 path={}", tempFile, e);
+            }
         }
     }
 

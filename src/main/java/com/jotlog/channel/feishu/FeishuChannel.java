@@ -7,12 +7,18 @@ import com.jotlog.core.Entry;
 import com.jotlog.core.Entry.ReplyTarget;
 import com.jotlog.core.EntryType;
 import com.lark.oapi.Client;
+import com.lark.oapi.core.Config;
+import com.lark.oapi.core.Transport;
 import com.lark.oapi.core.enums.AppType;
 import com.lark.oapi.core.enums.BaseUrlEnum;
+import com.lark.oapi.core.request.RequestOptions;
+import com.lark.oapi.core.response.RawResponse;
+import com.lark.oapi.core.token.AccessTokenType;
 import com.lark.oapi.event.EventDispatcher;
 import com.lark.oapi.service.im.ImService;
 import com.lark.oapi.service.im.v1.model.CreateMessageReq;
 import com.lark.oapi.service.im.v1.model.CreateMessageReqBody;
+import com.lark.oapi.service.im.v1.model.GetMessageResourceReq;
 import com.lark.oapi.service.im.v1.model.P2MessageReceiveV1;
 import com.lark.oapi.service.im.v1.model.ReplyMessageReq;
 import com.lark.oapi.service.im.v1.model.ReplyMessageReqBody;
@@ -20,9 +26,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 飞书长连接通道。
@@ -206,12 +217,28 @@ public class FeishuChannel implements ChannelAdapter {
     }
 
     /**
+     * 飞书错误码：资源超过 100MB，整包下载被拒。
+     * 官方规定 file 类型必须改走 Range 分片（单片 ≤32MB），image 类型不支持分片。
+     */
+    public static final int CODE_RESOURCE_TOO_LARGE = 234037;
+
+    /** Range 分片单片窗口：飞书要求单片不超过 32MB，取 16MB 留余量。 */
+    private static final long RANGE_CHUNK = 16L * 1024 * 1024;
+
+    private static final String RESOURCE_PATH =
+            "/open-apis/im/v1/messages/:message_id/resources/:file_key";
+
+    /**
      * 下载一条消息的资源（文件或图片）。
      *
      * 只在异步线程调用 —— 这里有网络往返，出现在事件回调里就违反 3 秒铁律。
      * type 参数：file 消息传 "file"，image 消息传 "image"，飞书按它区分取资源的方式。
      *
+     * 整包读进内存，只适合 100MB 以下的资源（飞书单请求硬上限）；
+     * 超限会抛 {@link ResourceTooLargeException}，调用方改走 {@link #downloadRange}。
+     *
      * @return 字节 + 实际文件名；失败返回 null（条目已入库，附件缺失不致命）
+     * @throws ResourceTooLargeException 资源达到 100MB 必须分片下载
      */
     public Downloaded download(String messageId, String fileKey, String type) {
         if (client == null || client.im() == null) {
@@ -220,21 +247,191 @@ public class FeishuChannel implements ChannelAdapter {
         }
         try {
             var resp = client.im().messageResource().get(
-                    new com.lark.oapi.service.im.v1.model.GetMessageResourceReq.Builder()
+                    new GetMessageResourceReq.Builder()
                             .messageId(messageId)
                             .fileKey(fileKey)
                             .type(type)
                             .build());
 
             if (!resp.success() || resp.getData() == null) {
+                if (resp.getCode() == CODE_RESOURCE_TOO_LARGE) {
+                    // 不降级成 null：null 会被当成普通失败静默跳过，
+                    // 这里必须让调用方知道"文件太大，该换分片路径"
+                    throw new ResourceTooLargeException(resp.getCode(), resp.getMsg());
+                }
                 log.error("资源下载失败 code={} msg={} fileKey={}",
                         resp.getCode(), resp.getMsg(), fileKey);
                 return null;
             }
             return new Downloaded(resp.getFileName(), resp.getData().toByteArray());
+        } catch (ResourceTooLargeException e) {
+            throw e;
         } catch (Exception e) {
             log.error("资源下载异常 messageId={} fileKey={}", messageId, fileKey, e);
             return null;
+        }
+    }
+
+    /**
+     * Range 分片下载大资源（仅 file 类型；image 飞书不支持分片）。
+     *
+     * 为什么绕开 SDK 的 messageResource().get()：那个封装把 HTTP 200 当成功、
+     * 其他状态码一律按 JSON 错误体反序列化，而分片成功返回的是 206，
+     * 会被误判成"非法响应"抛异常。这里直接用底层 Transport.send —— token 注入、
+     * 签名等仍由 SDK 完成，我们只自己发 Range 头、收 206、合并字节流。
+     *
+     * 内容直接写进调用方给的 sink（通常是临时文件 + DigestOutputStream），
+     * 500MB 文件的堆内占用峰值只有一个分片，-Xmx512m 也不会 OOM。
+     *
+     * @param sink 调用方负责关闭
+     * @return 飞书在 Content-Disposition 里给的文件名，可能为 null
+     */
+    public String downloadRange(String messageId, String fileKey, String type, OutputStream sink)
+            throws IOException {
+        if (client == null || client.im() == null) {
+            throw new IOException("资源下载不可用：API 客户端未初始化（见启动自检日志）");
+        }
+
+        Config config;
+        try {
+            config = client.accessToken().getConfig();
+        } catch (Exception e) {
+            throw new IOException("飞书客户端配置不可用", e);
+        }
+        if (config == null) {
+            throw new IOException("飞书客户端配置不可用");
+        }
+
+        var req = new GetMessageResourceReq.Builder()
+                .messageId(messageId)
+                .fileKey(fileKey)
+                .type(type)
+                .build();
+
+        long received = 0;
+        long total = -1;
+        String fileName = null;
+
+        try {
+            while (total < 0 || received < total) {
+                // 首片时 total 未知，窗口右边界按固定片长算；拿到 Content-Range 后会被总长收敛
+                long end = Math.min(received + RANGE_CHUNK, total > 0 ? total : Long.MAX_VALUE) - 1;
+                Map<String, List<String>> headers = new HashMap<>();
+                headers.put("Range", List.of("bytes=" + received + "-" + end));
+                RequestOptions options = RequestOptions.newBuilder()
+                        .supportDownLoad()
+                        .headers(headers)
+                        .build();
+
+                RawResponse resp = Transport.send(
+                        config, options, "GET", RESOURCE_PATH,
+                        Set.of(AccessTokenType.Tenant), req);
+
+                int status = resp.getStatusCode();
+                byte[] body = resp.getBody() == null ? new byte[0] : resp.getBody();
+
+                if (status == 200) {
+                    // 服务端没按 Range 切（小文件或网关行为）：这一包就是完整内容
+                    sink.write(body);
+                    received += body.length;
+                    total = received;
+                    if (fileName == null) {
+                        fileName = resp.getFileName();
+                    }
+                    break;
+                }
+                if (status == 206) {
+                    if (body.length == 0) {
+                        // 没有终止条件保护会死循环，空片直接判失败
+                        throw new IOException("分片下载返回空内容 start=" + received);
+                    }
+                    sink.write(body);
+                    received += body.length;
+                    if (fileName == null) {
+                        fileName = resp.getFileName();
+                    }
+                    if (total < 0) {
+                        total = parseTotalFromContentRange(header(resp, "Content-Range"));
+                        if (total <= 0) {
+                            throw new IOException("无法从 Content-Range 解析资源总大小");
+                        }
+                    }
+                    sink.flush();
+                    continue;
+                }
+
+                // 其余状态码：飞书把错误码放在 JSON body（code/msg）
+                String respBody = new String(body, StandardCharsets.UTF_8);
+                int code = -1;
+                String msg = "";
+                try {
+                    var node = mapper.readTree(respBody);
+                    code = node.path("code").asInt(-1);
+                    msg = node.path("msg").asText("");
+                } catch (Exception ignored) {
+                    // body 不是 JSON 也无所谓，下面把原始片段带进异常
+                }
+                throw new IOException("分片下载被拒绝 http=" + status
+                        + " code=" + code + " msg=" + msg
+                        + " body=" + respBody.substring(0, Math.min(respBody.length(), 200)));
+            }
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(
+                    "分片下载异常 messageId=" + messageId + " fileKey=" + fileKey, e);
+        }
+
+        log.info("大资源分片下载完成 messageId={} fileKey={} size={}",
+                messageId, fileKey, received);
+        return fileName;
+    }
+
+    /** 响应头大小写不敏感取值（OkHttp 多 map 里头名可能是小写）。 */
+    private static String header(RawResponse resp, String name) {
+        for (Map.Entry<String, List<String>> e : resp.getHeaders().entrySet()) {
+            if (e.getKey() != null && e.getKey().equalsIgnoreCase(name)
+                    && e.getValue() != null && !e.getValue().isEmpty()) {
+                return e.getValue().get(0);
+            }
+        }
+        return null;
+    }
+
+    /** Content-Range: bytes 0-16777215/524288000 → 524288000；无法解析返回 -1。 */
+    private static long parseTotalFromContentRange(String contentRange) {
+        if (contentRange == null) {
+            return -1;
+        }
+        int slash = contentRange.lastIndexOf('/');
+        if (slash < 0 || slash + 1 >= contentRange.length()) {
+            return -1;
+        }
+        String tail = contentRange.substring(slash + 1).trim();
+        if ("*".equals(tail)) {
+            return -1;
+        }
+        try {
+            return Long.parseLong(tail);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    /**
+     * 整包下载撞上飞书 100MB 上限（错误码 234037）。
+     * 必须用 unchecked：SDK 调用点的签名由父接口决定，且这是"换路径"信号而非普通失败。
+     */
+    public static class ResourceTooLargeException extends RuntimeException {
+        private final int code;
+
+        public ResourceTooLargeException(int code, String msg) {
+            super("飞书资源超过 100MB 整包下载上限，须分片下载 code=" + code + " msg=" + msg);
+            this.code = code;
+        }
+
+        public int code() {
+            return code;
         }
     }
 

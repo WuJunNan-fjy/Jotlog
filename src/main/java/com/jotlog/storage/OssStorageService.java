@@ -7,6 +7,7 @@ import com.aliyun.oss.model.ListObjectsRequest;
 import com.aliyun.oss.model.ObjectListing;
 import com.aliyun.oss.model.ObjectMetadata;
 import com.aliyun.oss.model.OSSObject;
+import com.aliyun.oss.model.UploadFileRequest;
 import com.jotlog.config.StorageProperties;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -83,6 +85,42 @@ public class OssStorageService implements StorageService {
             throw new StorageException("附件上传 OSS 失败：" + filename, oe);
         } catch (ClientException ce) {
             throw new StorageException("附件上传 OSS 失败（客户端错误）：" + filename, ce);
+        }
+    }
+
+    @Override
+    public StoredObject storeFile(Path source, long size, String filename, String mime, String sha256) {
+        String key = keyOf(sha256);
+        try {
+            // 同 sha 已存在则不重复上传，和小文件路径的去重口径一致
+            if (!ossClient.doesObjectExist(bucket, key)) {
+                // 5MB 一片：500MB = 100 片。单片上传快，某片失败只需重传一片，
+                // 不像整包 putObject 那样断一次就从头再来；taskNum=1 顺序传，
+                // 个人单用户场景不与自己抢出口带宽
+                UploadFileRequest req = new UploadFileRequest(
+                        bucket, key, source.toAbsolutePath().toString(),
+                        5L * 1024 * 1024, 1);
+                // 源文件用完即删，不生成 checkpoint 文件
+                req.setEnableCheckpoint(false);
+                ObjectMetadata metadata = new ObjectMetadata();
+                metadata.setContentLength(size);
+                if (!blank(mime)) {
+                    metadata.setContentType(mime);
+                }
+                req.setObjectMetadata(metadata);
+                // 注意：OSS 接口这里声明的是 throws Throwable（历史遗留），不能收窄
+                ossClient.uploadFile(req);
+            }
+            return new StoredObject(key, size);
+        } catch (com.aliyun.oss.OSSException oe) {
+            log.warn("OSS 大文件上传被拒绝 key={} code={} requestId={} hostId={}",
+                    key, oe.getErrorCode(), oe.getRequestId(), oe.getHostId());
+            throw new StorageException("大附件上传 OSS 失败：" + filename, oe);
+        } catch (ClientException ce) {
+            throw new StorageException("大附件上传 OSS 失败（客户端错误）：" + filename, ce);
+        } catch (Throwable t) {
+            // uploadFile 的 checked Throwable 以及 Error 包装路径
+            throw new StorageException("大附件上传 OSS 失败：" + filename, t);
         }
     }
 

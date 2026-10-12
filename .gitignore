@@ -34,6 +34,7 @@ config.toml
 .env.*
 !.env.example
 !config/application-local.yml.example
+!config/application-prod.yml.example
 
 # ---- WorkBuddy 工作记忆 ----
 # 是 AI 会话的内部笔记，不是项目源码，不提交。

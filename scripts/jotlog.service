@@ -34,6 +34,14 @@ Environment=JOTLOG_DB_PASSWORD=改成你自己的密码
 Environment=JOTLOG_DB_HOST=127.0.0.1
 Environment=JOTLOG_ATTACHMENT_DIR=/var/lib/jotlog/attachments
 
+# 附件存阿里云 OSS。四项真值自己填（bucket 私有，RAM 子账号 AK，不要主账号）。
+# 同地域 ECS 建议用内网 endpoint，免公网流量费。
+Environment=JOTLOG_STORAGE_TYPE=oss
+Environment=JOTLOG_OSS_ENDPOINT=oss-cn-hangzhou-internal.aliyuncs.com
+Environment=JOTLOG_OSS_ACCESS_KEY_ID=你自己的AK
+Environment=JOTLOG_OSS_ACCESS_KEY_SECRET=你自己的SK
+Environment=JOTLOG_OSS_BUCKET_NAME=jotlog
+
 # 日志走 journald，用 journalctl -u jotlog -f 查看
 StandardOutput=journal
 StandardError=journal

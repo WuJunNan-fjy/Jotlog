@@ -78,6 +78,8 @@ java -jar target/jotlog.jar
 
 前端产物会被塞进 jar 的 `static/` 下，部署只传一个文件。手机浏览器打开后"添加到主屏幕"，就是一个 PWA。
 
+生产环境用 prod profile：把 `config/application-prod.yml.example` 复制为 `config/application-prod.yml` 填好真值，连同 jar 一起放到服务器的 `config/` 目录下（`jotlog.service` 的 `WorkingDirectory=/opt/jotlog`，即 `/opt/jotlog/config/application-prod.yml`），由 `scripts/jotlog.service`（`SPRING_PROFILES_ACTIVE=prod`）拉起。敏感项也可以不落盘，改用 systemd 的 `Environment=` 注入。真值文件已被 gitignore。
+
 > MySQL 侧有个必须做的设置，否则搜不到含 `a`/`i` 的英文词（比如 `Java`）：
 > `SET GLOBAL innodb_ft_enable_stopword = 0`，并写进 `my.cnf`。
 > 见 `scripts/init-db.sql`。

@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
@@ -52,6 +53,29 @@ public class LocalStorageService implements StorageService {
             return new StoredObject(keyOf(sha256), bytes.length);
         } catch (Exception e) {
             throw new StorageException("附件写盘失败：" + filename, e);
+        }
+    }
+
+    @Override
+    public StoredObject storeFile(Path source, long size, String filename, String mime, String sha256) {
+        try {
+            Path target = resolve(sha256);
+            Files.createDirectories(target.getParent());
+            if (!Files.exists(target)) {
+                try {
+                    // 临时目录与附件目录通常同盘，move 是原子的且零拷贝
+                    Files.move(source, target);
+                } catch (IOException moveFailed) {
+                    // 跨挂载点（如 PrivateTmp 与 /var/lib 不同设备）move 会失败，退化为复制；
+                    // move 也可能已复制成功但删源失败，此时 target 已存在，别再覆盖
+                    if (!Files.exists(target)) {
+                        Files.copy(source, target);
+                    }
+                }
+            }
+            return new StoredObject(keyOf(sha256), size);
+        } catch (Exception e) {
+            throw new StorageException("大附件写盘失败：" + filename, e);
         }
     }
 

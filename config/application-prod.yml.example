@@ -1,0 +1,109 @@
+# ============================================================================
+# 生产部署配置【模板】（这个文件进 Git，只放占位符，别写真值）
+#
+# 用法：
+#   1. 复制为同目录下的 application-prod.yml，填入真实值：
+#        cp config/application-prod.yml.example config/application-prod.yml
+#      （Windows PowerShell）
+#        Copy-Item config\application-prod.yml.example config\application-prod.yml
+#   2. 把 application-prod.yml 连同 jar 一起放到服务器的 config/ 目录下
+#      （scripts/jotlog.service 的 WorkingDirectory=/opt/jotlog，
+#       即 /opt/jotlog/config/application-prod.yml）
+#   3. application-prod.yml 已被 .gitignore 忽略，不会进 Git
+#
+# 加载机制：
+#   jotlog.service 里 SPRING_PROFILES_ACTIVE=prod，Spring 会读运行目录下
+#   config/application-prod.yml，覆盖 jar 内 application.yml 的占位符。
+#   配置在 jar 外，改完重启服务即生效，不用重新打包。
+#
+# 两种注入真值的方式，任选其一：
+#   A. 全部写在 application-prod.yml 里（下面这种）
+#   B. 文件里只留非敏感项，敏感项走 systemd 的 Environment=（见 jotlog.service
+#      和尾部对照表）。环境变量优先级高于配置文件，两种混用也可以。
+#
+# ⚠️ 千万不要把填好的 application-prod.yml 提交上去。
+# ============================================================================
+
+spring:
+  datasource:
+    # ⚠️ characterEncoding 只能写 UTF-8。写 utf8mb4 会抛
+    #    "Unsupported character encoding 'utf8mb4'"（Java 里没有这个 charset 名），
+    #    应用直接起不来。Connector/J 会把 UTF-8 自动映射为 MySQL 的 utf8mb4。
+    #
+    # 127.0.0.1 = jar 与 MySQL 同机部署（推荐，3306 不对公网开放）。
+    # 数据库单独一台机器时改成对应 IP。
+    url: jdbc:mysql://127.0.0.1:3306/jotlog?characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&useSSL=false
+    username: YOUR_DB_USER
+    password: YOUR_DB_PASSWORD
+
+  # 登录验证码走 SMTP。密码要填「授权码」不是邮箱登录密码。
+  # 587 + STARTTLS（默认）；465 需要同时 JOTLOG_MAIL_STARTTLS=false、JOTLOG_MAIL_SSL=true。
+  mail:
+    host: smtp.qq.com
+    port: 587
+    username: YOUR_EMAIL@qq.com
+    password: YOUR_SMTP_AUTH_CODE
+
+jotlog:
+  # ---------- 登录账号 ----------
+  # 首次启动用这三个值建出唯一的用户。建好之后 password 就失效了，
+  # 之后改密码走设置页，配置文件里不再有明文密码的意义。
+  auth:
+    username: admin
+    email: YOUR_EMAIL@qq.com
+    password: YOUR_INITIAL_PASSWORD
+    # ≥32 字符的固定串，让登录态跨重启存活。换值 = 所有人重新登录。
+    # 注意不要和开发用的 application-local.yml 用同一个 secret。
+    jwt-secret: YOUR_RANDOM_STRING_AT_LEAST_32_CHARS
+    # 生产必须 false：true 时验证码只写日志不发信，等于没有登录验证。
+    dev-code-to-log: false
+  mail:
+    # 留空则回落到 spring.mail.username
+    from: YOUR_EMAIL@qq.com
+
+  channel:
+    feishu:
+      # 凭证配好 + 飞书应用已发布后再改成 true
+      enabled: false
+      app-id: YOUR_FEISHU_APP_ID
+      app-secret: YOUR_FEISHU_APP_SECRET
+
+  # ---------- 附件存储 ----------
+  storage:
+    # local=服务器磁盘；oss=阿里云 OSS（Jotlog 专用 bucket，与 Junan 不混用）
+    type: oss
+    # 仅 local 用，oss 模式下不生效。与 jotlog.service 的
+    # ReadWritePaths=/var/lib/jotlog 对齐，目录需预先建好并 chown 给 jotlog 用户。
+    attachment-dir: /var/lib/jotlog/attachments
+    # 仅 type=oss 时需要，四项必须配齐，缺一项启动直接 fail fast：
+    #   - endpoint：建议 ECS 同地域内网 endpoint（oss-cn-xxx-internal.aliyuncs.com），
+    #     免公网流量费；jar 不在阿里云 ECS 上才用公网 endpoint
+    #   - AK/SK：用 RAM 子账号，不要主账号；策略只授该 bucket 的
+    #     oss:PutObject/GetObject/DeleteObject/ListObjects
+    #   - bucket：私有读写，不开公共读；附件访问走预签名 URL
+    oss:
+      endpoint: YOUR_OSS_ENDPOINT
+      access-key-id: YOUR_OSS_ACCESS_KEY_ID
+      access-key-secret: YOUR_OSS_ACCESS_KEY_SECRET
+      bucket-name: YOUR_OSS_BUCKET_NAME
+
+# ============================================================================
+# 附：环境变量注入（scripts/jotlog.service 用的就是这种，密钥不进配置文件）
+#
+# 环境变量名 = 配置项全大写 + 点换下划线，优先级高于本文件：
+#
+#   SPRING_PROFILES_ACTIVE=prod       激活 prod（service 文件里已设）
+#   JOTLOG_DB_HOST                    数据库地址，同机部署填 127.0.0.1
+#   JOTLOG_DB_USER / JOTLOG_DB_PASSWORD
+#   JOTLOG_MAIL_HOST / JOTLOG_MAIL_PORT / JOTLOG_MAIL_USERNAME / JOTLOG_MAIL_PASSWORD
+#   JOTLOG_AUTH_PASSWORD              初始密码，只在首次启动建号时用一次
+#   JOTLOG_JWT_SECRET                 ≥32 字符
+#   JOTLOG_DEV_CODE_TO_LOG            生产必须 false
+#   JOTLOG_ATTACHMENT_DIR             附件目录，仅 local 存储
+#   FEISHU_APP_ID / FEISHU_APP_SECRET 飞书凭证
+#
+# 生成 JWT 密钥：
+#   openssl rand -base64 48
+#
+# 完整对照表（含 OSS）见 config/application-local.yml.example 尾部。
+# ============================================================================

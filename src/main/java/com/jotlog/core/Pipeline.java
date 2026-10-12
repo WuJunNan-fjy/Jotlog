@@ -8,6 +8,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.security.DigestOutputStream;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -133,8 +141,20 @@ public class Pipeline {
         String messageId = entry.sourceMsgId();
 
         for (Entry.Attachment att : lazy) {
-            FeishuChannel.Downloaded dl = feishu.download(
-                    messageId, att.sourceKey(), isImage ? "image" : "file");
+            String resourceType = isImage ? "image" : "file";
+            FeishuChannel.Downloaded dl;
+            try {
+                dl = feishu.download(messageId, att.sourceKey(), resourceType);
+            } catch (FeishuChannel.ResourceTooLargeException tooLarge) {
+                // 飞书硬限制：整包下载只支持 100MB 以下。file 可分片，image 不支持 Range
+                if (isImage) {
+                    log.warn("图片附件超过飞书 100MB 上限且不支持分片，无法补挂 entryId={} fileKey={}",
+                            entryId, att.sourceKey());
+                } else {
+                    saveLargeFile(feishu, entryId, messageId, att);
+                }
+                continue;
+            }
             if (dl == null || dl.bytes() == null || dl.bytes().length == 0) {
                 continue;
             }
@@ -151,6 +171,66 @@ public class Pipeline {
             if (saved > 0) {
                 log.info("附件补挂成功 entryId={} filename={} size={}",
                         entryId, filename, dl.bytes().length);
+            }
+        }
+    }
+
+    /**
+     * 飞书 ≥100MB 文件的补挂。
+     *
+     * Range 分片下载到临时文件，同时用 DigestOutputStream 边写边算 sha ——
+     * 这样不需要下载完再重读一遍 500MB。下载完成后把临时文件流式搬进存储：
+     * OSS 走 multipart 分片上传，local 直接 move/copy。全程堆内峰值只有一个
+     * 下载分片（16MB），与文件总大小无关。
+     *
+     * 失败只 warn 并清理临时文件：原文早已入库，附件缺失是可接受的降级，
+     * 用户可以把文件重新发给机器人再触发一次（幂等 + sha 去重兜底）。
+     */
+    private void saveLargeFile(FeishuChannel feishu, long entryId, String messageId,
+                               Entry.Attachment att) {
+        Path tmp = null;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            tmp = Files.createTempFile("jotlog-feishu-", ".part");
+            String remoteName;
+            try (OutputStream fileOut = Files.newOutputStream(
+                    tmp, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                 OutputStream out = new DigestOutputStream(fileOut, digest)) {
+                remoteName = feishu.downloadRange(messageId, att.sourceKey(), "file", out);
+            }
+
+            long size = Files.size(tmp);
+            if (size == 0) {
+                log.warn("大附件分片下载结果为空 entryId={} fileKey={}", entryId, att.sourceKey());
+                return;
+            }
+            String sha = HexFormat.of().formatHex(digest.digest());
+            String filename = remoteName != null && !remoteName.isBlank()
+                    ? remoteName : att.filename();
+            if (filename == null || filename.isBlank()) {
+                filename = sha; // 飞书和事件体都没给名字时，sha 至少是个稳定唯一名
+            }
+            String mime = mimeByExtension(filename);
+
+            // 成功时临时文件由 saveAttachmentFile 的 finally 删除
+            int saved = ingest.saveAttachmentFile(
+                    entryId, filename, mime, tmp, size, sha, att.sourceKey());
+            tmp = null; // 已交由 saveAttachmentFile 清理，外层 catch 别重复删
+            if (saved > 0) {
+                log.info("大附件补挂成功 entryId={} filename={} size={}",
+                        entryId, filename, size);
+            }
+        } catch (Exception e) {
+            log.warn("大附件分片补挂失败 entryId={} fileKey={}",
+                    entryId, att.sourceKey(), e);
+        } finally {
+            // 下载阶段就失败、或根本没走到 saveAttachmentFile 时在这里兜底清理
+            if (tmp != null) {
+                try {
+                    Files.deleteIfExists(tmp);
+                } catch (IOException e) {
+                    log.warn("大附件临时文件删除失败 path={}", tmp, e);
+                }
             }
         }
     }
