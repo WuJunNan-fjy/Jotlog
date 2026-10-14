@@ -19,6 +19,47 @@ export interface Entry {
   imageSha: string | null
   /** 附件总数（图片 + 文件）。0 = 无附件 */
   attachmentCount: number
+  /** 分类 id，null = 待分类 */
+  categoryId: number | null
+  categoryName: string | null
+  /** AI 建议但尚未被采纳的新分类名；采纳或手动选分类后清空 */
+  suggestedCategory: string | null
+  /** 结构化标签名（来自 entry_tags）；空数组 = 没标签 */
+  tags: string[]
+}
+
+export interface Category {
+  id: number
+  name: string
+  color: string | null
+  sortOrder: number
+  system: boolean
+  /** 该分类下未归档条目数 */
+  count: number
+}
+
+export interface EntryLink {
+  id: number
+  url: string
+  domain: string | null
+  kind: string
+  fetchedTitle: string | null
+  fetchStatus: string
+}
+
+export interface BatchProgress {
+  active: boolean
+  total?: number
+  enqueued?: number
+}
+
+export interface AiStatusInfo {
+  enabled: boolean
+  configured: boolean
+  ready: boolean
+  model: string
+  polishNotes: boolean
+  batch: BatchProgress
 }
 
 /** 附件元数据，详情面板用。见 GET /api/entries/{id}/attachments */

@@ -47,6 +47,27 @@ const router = createRouter({
           meta: { title: '归档' },
         },
         {
+          path: 'c/:id',
+          name: 'category',
+          component: () => import('../views/TimelineView.vue'),
+          props: (route) => ({ mode: 'category', categoryId: Number(route.params.id) }),
+          meta: { title: '分类' },
+        },
+        {
+          path: 'tag/:name',
+          name: 'tag',
+          component: () => import('../views/TimelineView.vue'),
+          props: (route) => ({ mode: 'tag', tag: String(route.params.name) }),
+          meta: { title: '标签' },
+        },
+        {
+          path: 'inbox',
+          name: 'uncategorized',
+          component: () => import('../views/TimelineView.vue'),
+          props: { mode: 'uncategorized' },
+          meta: { title: '待分类' },
+        },
+        {
           path: 'search',
           name: 'search',
           component: () => import('../views/SearchView.vue'),

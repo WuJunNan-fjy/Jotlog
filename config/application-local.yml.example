@@ -82,6 +82,18 @@ jotlog:
       access-key-secret: YOUR_OSS_ACCESS_KEY_SECRET
       bucket-name: YOUR_OSS_BUCKET_NAME
 
+  # ---------- AI 增强 ----------
+  # DeepSeek 控制台 https://platform.deepseek.com 创建 API key。
+  # 不配就保持 enabled:false，整个 AI 链路不启动，不影响记录功能。
+  ai:
+    enabled: false
+    base-url: https://api.deepseek.com
+    api-key: YOUR_DEEPSEEK_API_KEY
+    model: deepseek-chat
+    # 纯文本随记是否也调 AI。默认 false：随记直接归入「灵感随记」，不花钱。
+    # 运行时以设置页开关（user_settings 表）为准，这里只是默认值。
+    polish-notes: false
+
 # ============================================================================
 # 附：服务器部署用的环境变量对照表
 #
@@ -115,6 +127,11 @@ jotlog:
 #   FEISHU_ENABLED          是否连飞书，默认 false
 #   FEISHU_APP_ID           飞书 App ID
 #   FEISHU_APP_SECRET       飞书 App Secret
+#   JOTLOG_AI_ENABLED       是否启用 AI 增强，默认 false
+#   JOTLOG_AI_BASE_URL      OpenAI 兼容端点，默认 https://api.deepseek.com
+#   JOTLOG_AI_KEY           DeepSeek API key
+#   JOTLOG_AI_MODEL         模型名，默认 deepseek-chat
+#   JOTLOG_AI_POLISH_NOTES  纯文本随记是否也 AI 总结，默认 false
 #
 # 生成 JWT 密钥：
 #   openssl rand -base64 48

@@ -119,32 +119,116 @@
         </div>
       </section>
 
-      <!-- 链接 -->
-      <a
-        v-if="entry.url"
-        :href="entry.url"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="mt-4 flex items-center gap-3 rounded-lg border border-line px-3.5 py-3 transition-colors hover:border-accent hover:bg-accent-soft/40"
-      >
-        <span
-          class="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-accent-soft text-[14px] font-medium text-accent"
-        >
-          {{ hostInitial }}
-        </span>
-        <span class="min-w-0 flex-1">
-          <span class="block truncate text-[13.5px] text-ink">{{ host }}</span>
-          <span class="block truncate text-[11.5px] text-ink-3">{{ entry.url }}</span>
-        </span>
-        <Icon name="external" :size="16" class="shrink-0 text-ink-3" />
-      </a>
+      <!-- 素材链接：一条记录里抽出的全部链接，都抓过什么、抓到没有 -->
+      <section v-if="linksList.length" class="mt-4">
+        <p class="mb-1.5 flex items-center gap-1.5 text-[11.5px] tracking-wide text-ink-3">
+          <Icon name="link" :size="13" />
+          链接 · {{ linksList.length }}
+        </p>
+        <div class="space-y-1.5">
+          <a
+            v-for="l in linksList"
+            :key="l.id"
+            :href="l.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center gap-2.5 rounded-lg border border-line-soft px-3 py-2.5 transition-colors hover:border-accent hover:bg-accent-soft/40"
+          >
+            <span
+              class="grid h-7 w-7 shrink-0 place-items-center rounded-md border"
+              :style="{ color: kindColor(l.kind), borderColor: `${kindColor(l.kind)}55` }"
+            >
+              <Icon :name="kindIcon(l.kind)" :size="13" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-[13px] text-ink">{{
+                l.fetchedTitle || hostLabel(l.url, l.domain)
+              }}</span>
+              <span class="block truncate text-[11px] text-ink-3">{{ l.url }}</span>
+            </span>
+            <Icon
+              v-if="l.fetchStatus === 'failed'"
+              name="refresh"
+              :size="13"
+              class="shrink-0 text-danger"
+            />
+            <Icon v-else name="external" :size="14" class="shrink-0 text-ink-3" />
+          </a>
+        </div>
+      </section>
 
-      <!-- 标签 -->
-      <div v-if="tags.length" class="mt-4 flex flex-wrap gap-1.5">
-        <span v-for="tag in tags" :key="tag" class="chip bg-paper-sunken text-ink-3">
-          {{ tag }}
-        </span>
-      </div>
+      <!-- 整理：分类与标签。AI 只做建议，采纳和修改永远在人这一侧 -->
+      <section class="mt-4 space-y-2.5">
+        <p class="flex items-center gap-1.5 text-[11.5px] tracking-wide text-ink-3">
+          <Icon name="tag" :size="13" />
+          整理
+        </p>
+
+        <!-- AI 觉得现有分类都不合适，建议了一个新名字：一键采纳落库 -->
+        <div
+          v-if="entry.suggestedCategory"
+          class="flex items-center justify-between gap-2 rounded-lg border border-brass/40 bg-brass-soft/50 px-3 py-2"
+        >
+          <span class="text-[12.5px] text-ink-2">
+            AI 建议新分类「<span class="font-medium">{{ entry.suggestedCategory }}</span>」
+          </span>
+          <button
+            class="btn btn-ghost px-2 py-1 text-[12px]"
+            :disabled="categoryBusy"
+            @click="acceptSuggestion"
+          >
+            采纳
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <CategoryDot
+            :color="
+              categoryStore.categories.find((c) => c.id === selectedCategoryId)?.color ?? null
+            "
+          />
+          <select
+            v-model.number="selectedCategoryId"
+            class="field flex-1 py-1.5 text-[13px]"
+            :disabled="categoryBusy"
+            @change="saveCategory"
+          >
+            <option :value="null">待分类</option>
+            <option v-for="c in categoryStore.categories" :key="c.id" :value="c.id">
+              {{ c.name }}
+            </option>
+          </select>
+        </div>
+
+        <TagEditor v-model="editingTags" />
+        <div class="flex items-center justify-between gap-2">
+          <button
+            class="btn btn-ghost px-2.5 py-1 text-[12.5px]"
+            :disabled="!tagsDirty || tagsBusy"
+            @click="saveTags"
+          >
+            {{ tagsBusy ? '保存中…' : '保存标签' }}
+          </button>
+          <button
+            class="btn btn-quiet px-2.5 py-1 text-[12.5px]"
+            :disabled="repolishBusy"
+            @click="repolish"
+          >
+            <Icon name="refresh" :size="13" />
+            {{ repolishBusy ? '已入队' : '重新分析' }}
+          </button>
+        </div>
+        <p
+          v-if="entry.aiStatus === 'pending' || entry.aiStatus === 'processing'"
+          class="flex items-center gap-1.5 text-[12px] text-ink-3"
+        >
+          <span class="h-[5px] w-[5px] animate-pulse rounded-full bg-ink-3" />
+          AI 正在整理这条内容…
+        </p>
+        <p v-else-if="entry.aiStatus === 'failed'" class="text-[12px] text-danger">
+          上次整理失败了，可以点"重新分析"再试一次
+        </p>
+      </section>
 
       <!-- 元信息：折叠在最后，多数时候没人看，但排查"这条怎么进来的"时很有用 -->
       <dl class="mt-5 border-line-soft space-y-1.5 border-t pt-4 text-[12px]">
@@ -194,18 +278,22 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { AttachmentMeta, Entry } from '../types'
-import { api } from '../api/http'
+import type { AttachmentMeta, Entry, EntryLink } from '../types'
+import { api, ApiError } from '../api/http'
 import { downloadAttachment } from '../api/attachmentCache'
 import { useToast } from '../composables/useToast'
 import { formatFull, dayNumber, hostLabel, monthYear } from '../utils/format'
 import { looksLikeMarkdown } from '../utils/markdown'
 import { aiStatusLabel, sourceLabel as sourceText } from '../utils/entryMeta'
 import { useEntryOps } from '../composables/useEntryOps'
+import { useUiStore } from '../stores/ui'
+import { useCategoryStore } from '../stores/categories'
 import AttachmentImage from './AttachmentImage.vue'
+import CategoryDot from './CategoryDot.vue'
 import Icon from './Icon.vue'
 import Lightbox from './Lightbox.vue'
 import MarkdownView from './MarkdownView.vue'
+import TagEditor from './TagEditor.vue'
 import TypeBadge from './TypeBadge.vue'
 
 const props = withDefaults(defineProps<{ entry: Entry; closable?: boolean }>(), { closable: false })
@@ -214,20 +302,14 @@ const emit = defineEmits<{ close: [] }>()
 
 const ops = useEntryOps()
 const toast = useToast()
+const ui = useUiStore()
+const categoryStore = useCategoryStore()
+categoryStore.load().catch(() => {})
 
 const confirmDelete = ref(false)
 let timer: ReturnType<typeof setTimeout> | null = null
 
-const host = computed(() => hostLabel(props.entry.url ?? '', props.entry.domain))
-const hostInitial = computed(() => host.value.slice(0, 1).toUpperCase())
 const sourceLabel = computed(() => sourceText(props.entry.source))
-
-const tags = computed(() =>
-  (props.entry.aiTags ?? '')
-    .split(/[,，\s]+/)
-    .map((t) => t.trim())
-    .filter(Boolean),
-)
 
 /* ---------- Markdown 渲染 / 原文切换 ---------- */
 
@@ -273,6 +355,125 @@ function prettySize(bytes: number): string {
   return `${bytes} B`
 }
 
+/* ---------- 链接素材 / 分类 / 标签 ---------- */
+
+const links = ref<EntryLink[]>([])
+/** 编辑中的标签副本，保存后才落库 —— 不边打字边发请求 */
+const editingTags = ref<string[]>([])
+const selectedCategoryId = ref<number | null>(null)
+const categoryBusy = ref(false)
+const tagsBusy = ref(false)
+const repolishBusy = ref(false)
+
+const tagsDirty = computed(
+  () =>
+    editingTags.value.length !== props.entry.tags.length ||
+    editingTags.value.some((t, i) => t !== props.entry.tags[i]),
+)
+
+/** 优先展示 entry_links 的多链接；V3 之前的老条目没有登记，兜底用主链接 */
+const linksList = computed<EntryLink[]>(() => {
+  if (links.value.length) return links.value
+  return props.entry.url
+    ? [
+        {
+          id: -1,
+          url: props.entry.url,
+          domain: props.entry.domain,
+          kind: 'WEB',
+          fetchedTitle: props.entry.title,
+          fetchStatus: 'legacy',
+        },
+      ]
+    : []
+})
+
+const KIND_COLORS: Record<string, string> = {
+  REPO: '#5B8A72',
+  VIDEO: '#A5A58D',
+  NPM: '#B08968',
+  WEB: '#9a9a8f',
+}
+const KIND_ICONS: Record<string, string> = {
+  REPO: 'repo',
+  VIDEO: 'video',
+  NPM: 'file',
+  WEB: 'link',
+}
+function kindColor(kind: string) {
+  return KIND_COLORS[kind] ?? KIND_COLORS.WEB
+}
+function kindIcon(kind: string) {
+  return KIND_ICONS[kind] ?? 'link'
+}
+
+async function saveCategory() {
+  categoryBusy.value = true
+  try {
+    const res = await api.setEntryCategory(props.entry.id, selectedCategoryId.value)
+    props.entry.categoryId = res.categoryId
+    props.entry.categoryName =
+      categoryStore.categories.find((c) => c.id === res.categoryId)?.name ?? null
+    props.entry.suggestedCategory = null
+    categoryStore.load(true).catch(() => {})
+    // 当前视图可能正按分类过滤，归类后让列表重新对齐
+    ui.bumpReload()
+    toast.push('分类已更新', 'success')
+  } catch (e) {
+    toast.push(e instanceof ApiError ? e.message : '分类没改成', 'danger')
+    selectedCategoryId.value = props.entry.categoryId
+  } finally {
+    categoryBusy.value = false
+  }
+}
+
+async function acceptSuggestion() {
+  categoryBusy.value = true
+  try {
+    const res = await api.setEntryCategory(props.entry.id, null, true)
+    await categoryStore.load(true)
+    props.entry.categoryId = res.categoryId
+    props.entry.categoryName =
+      categoryStore.categories.find((c) => c.id === res.categoryId)?.name ?? null
+    props.entry.suggestedCategory = null
+    selectedCategoryId.value = res.categoryId
+    ui.bumpReload()
+    toast.push('已采纳建议分类', 'success')
+  } catch (e) {
+    toast.push(e instanceof ApiError ? e.message : '采纳失败', 'danger')
+  } finally {
+    categoryBusy.value = false
+  }
+}
+
+async function saveTags() {
+  tagsBusy.value = true
+  try {
+    const res = await api.setEntryTags(props.entry.id, editingTags.value)
+    props.entry.tags = res.tags
+    editingTags.value = [...res.tags]
+    ui.bumpReload()
+    toast.push('标签已保存', 'success')
+  } catch (e) {
+    toast.push(e instanceof ApiError ? e.message : '标签没保存成', 'danger')
+  } finally {
+    tagsBusy.value = false
+  }
+}
+
+async function repolish() {
+  repolishBusy.value = true
+  try {
+    await api.repolish(props.entry.id)
+    props.entry.aiStatus = 'pending'
+    toast.push('已重新排队，稍等片刻', 'success')
+  } catch (e) {
+    toast.push(e instanceof ApiError ? e.message : '没有入队', 'danger')
+  } finally {
+    repolishBusy.value = false
+  }
+}
+
 // 换条目就重拉附件。附件跟着条目走，不进全局状态 —— 只有详情页用得到
 watch(
   () => props.entry.id,
@@ -282,10 +483,24 @@ watch(
     rendered.value = true
     lightboxIndex.value = null
     attachments.value = []
+    links.value = []
+    selectedCategoryId.value = props.entry.categoryId
+    // 优先结构化标签；老条目回退 aiTags 快照
+    editingTags.value = props.entry.tags.length
+      ? [...props.entry.tags]
+      : (props.entry.aiTags ?? '')
+          .split(/[,，\s]+/)
+          .map((t) => t.trim())
+          .filter(Boolean)
     try {
       attachments.value = await api.entryAttachments(props.entry.id)
     } catch {
       // 附件拉不到不影响正文阅读，静默降级成"没有附件"
+    }
+    try {
+      links.value = await api.entryLinks(props.entry.id)
+    } catch {
+      // 链接列表拉不到就走 entry.url 兜底
     }
   },
   { immediate: true },

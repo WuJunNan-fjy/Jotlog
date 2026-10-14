@@ -53,6 +53,49 @@
           {{ item.badge }}
         </span>
       </RouterLink>
+
+      <!-- 分类分组：预设分类 + 待分类入口。窄轨只显示色点/图标 -->
+      <div class="mt-3 border-line-soft border-t pt-2">
+        <p v-if="!collapsed" class="t-rule mb-1 px-2.5">分类</p>
+        <RouterLink
+          v-for="c in categoryStore.categories"
+          :key="c.id"
+          :to="`/c/${c.id}`"
+          :title="collapsed ? c.name : undefined"
+          class="mb-0.5 flex items-center gap-3 rounded-[3px] px-2.5 py-2 text-[13.5px] transition-colors"
+          :class="[
+            collapsed ? 'justify-center' : '',
+            route.path === `/c/${c.id}`
+              ? 'bg-ink text-paper'
+              : 'text-ink-2 hover:bg-paper-sunken hover:text-ink',
+          ]"
+        >
+          <CategoryDot :color="c.color" />
+          <span v-if="!collapsed" class="flex-1 truncate">{{ c.name }}</span>
+          <span v-if="!collapsed && c.count" class="tabular text-[12px] text-ink-3">{{ c.count }}</span>
+        </RouterLink>
+
+        <RouterLink
+          to="/inbox"
+          :title="collapsed ? '待分类' : undefined"
+          class="mb-0.5 flex items-center gap-3 rounded-[3px] px-2.5 py-2 text-[13.5px] transition-colors"
+          :class="[
+            collapsed ? 'justify-center' : '',
+            route.path === '/inbox'
+              ? 'bg-ink text-paper'
+              : 'text-ink-2 hover:bg-paper-sunken hover:text-ink',
+          ]"
+        >
+          <Icon name="inbox" :size="16" class="shrink-0" />
+          <span v-if="!collapsed" class="flex-1 truncate">待分类</span>
+          <span
+            v-if="!collapsed && categoryStore.uncategorized"
+            class="tabular text-[12px] text-ink-3"
+          >
+            {{ categoryStore.uncategorized }}
+          </span>
+        </RouterLink>
+      </div>
     </nav>
 
     <!-- 概览数字：窄轨放不下，只在完整侧栏显示 -->
@@ -86,12 +129,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Icon from './Icon.vue'
 import UserMenu from './UserMenu.vue'
+import CategoryDot from './CategoryDot.vue'
 import { useStatsStore } from '../stores/stats'
 import { useUiStore } from '../stores/ui'
+import { useCategoryStore } from '../stores/categories'
 
 /** 窄轨模式由父组件根据断点传入，避免在组件里再监听一次媒体查询 */
 defineProps<{ collapsed: boolean }>()
@@ -100,6 +145,13 @@ const route = useRoute()
 const router = useRouter()
 const stats = useStatsStore()
 const ui = useUiStore()
+const categoryStore = useCategoryStore()
+
+onMounted(() => {
+  categoryStore.load().catch(() => {
+    /* 侧栏分类加载失败不阻塞页面 */
+  })
+})
 
 // 用 computed 而不是普通数组：星标/归档的计数要跟着 stats 变，
 // 写成普通对象数组的话数字只会是首次渲染那一刻的值。

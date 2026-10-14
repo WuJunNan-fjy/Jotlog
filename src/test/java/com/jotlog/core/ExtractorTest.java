@@ -2,8 +2,11 @@ package com.jotlog.core;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * URL 抽取与类型判定。
@@ -56,5 +59,36 @@ class ExtractorTest {
     void 多个链接取第一个() {
         var r = Extractor.extract("参考 https://a.com 还有 https://b.com 第二个先不管");
         assertEquals("https://a.com", r.url());
+    }
+
+    @Test
+    void extractAll_抽出全部链接并去重_主体优先级repo最高() {
+        String text = """
+                3.02 复制打开抖音 https://v.douyin.com/w_6uKY4ZYbk/ gOX
+                GitHub：https://github.com/morluto/rea
+                主页：https://rea.tools
+                再发一次 GitHub https://github.com/morluto/rea
+                """;
+        var all = Extractor.extractAll(text);
+        assertEquals(3, all.links().size());
+        assertEquals(List.of(
+                "https://v.douyin.com/w_6uKY4ZYbk/",
+                "https://github.com/morluto/rea",
+                "https://rea.tools"), all.links().stream().map(Extractor.Link::url).toList());
+        assertEquals("github.com", all.primary().domain());
+        assertEquals(EntryType.REPO, all.primary().type());
+    }
+
+    @Test
+    void extractAll_无链接时空结果() {
+        var all = Extractor.extractAll("人生不是赶路，是看风景");
+        assertTrue(all.links().isEmpty());
+        assertNull(all.primary());
+    }
+
+    @Test
+    void extractAll_纯视频链接判video() {
+        var all = Extractor.extractAll("看看这个 https://www.bilibili.com/video/BV1xx");
+        assertEquals(EntryType.VIDEO, all.primary().type());
     }
 }

@@ -61,9 +61,38 @@
 
         <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
           <TypeBadge :type="entry.entryType" class="e-chip" />
-          <span v-for="tag in tags" :key="tag" class="e-chip chip bg-paper-sunken text-ink-3">
-            {{ tag }}
+          <RouterLink
+            v-if="entry.categoryId"
+            :to="`/c/${entry.categoryId}`"
+            class="e-chip chip bg-paper-sunken text-ink-3 inline-flex items-center gap-1.5"
+            @click.stop
+          >
+            <CategoryDot :color="categoryColor" />
+            {{ entry.categoryName }}
+          </RouterLink>
+          <RouterLink
+            v-for="tag in tags"
+            :key="tag"
+            :to="`/tag/${encodeURIComponent(tag)}`"
+            class="e-chip chip bg-paper-sunken text-ink-3"
+            @click.stop
+          >
+            #{{ tag }}
+          </RouterLink>
+          <span
+            v-if="entry.aiStatus === 'processing' || entry.aiStatus === 'pending'"
+            class="e-chip chip text-ink-4 inline-flex items-center gap-1"
+          >
+            <span class="h-[5px] w-[5px] animate-pulse rounded-full bg-ink-3" />
+            整理中
           </span>
+          <button
+            v-else-if="entry.aiStatus === 'failed'"
+            class="e-chip chip text-danger underline-offset-2 hover:underline"
+            @click.stop="emit('repolish')"
+          >
+            整理失败，点此重试
+          </button>
           <span class="e-source text-[11.5px] text-ink-4">{{ sourceLabel }}</span>
         </div>
       </div>
@@ -150,6 +179,8 @@ import { sourceLabel as sourceText } from '../utils/entryMeta'
 import AttachmentImage from './AttachmentImage.vue'
 import Icon from './Icon.vue'
 import TypeBadge from './TypeBadge.vue'
+import CategoryDot from './CategoryDot.vue'
+import { useCategoryStore } from '../stores/categories'
 
 const props = defineProps<{ entry: Entry; selected?: boolean; highlight?: string }>()
 
@@ -158,7 +189,10 @@ const emit = defineEmits<{
   toggleStar: []
   toggleArchive: []
   delete: []
+  repolish: []
 }>()
+
+const categoryStore = useCategoryStore()
 
 const confirming = ref(false)
 let resetTimer: ReturnType<typeof setTimeout> | null = null
@@ -176,13 +210,18 @@ const fileCount = computed(() =>
   Math.max(props.entry.attachmentCount - (props.entry.imageSha ? 1 : 0), 0),
 )
 
-/** aiTags 是逗号或空格分隔的一串，页面上一个一个显示成小药丸 */
-const tags = computed(() =>
-  (props.entry.aiTags ?? '')
+/** 优先用结构化标签（entry_tags），老数据回退到 aiTags 快照字符串，最多 3 个 */
+const tags = computed(() => {
+  const structured = props.entry.tags ?? []
+  const fromSnapshot = (props.entry.aiTags ?? '')
     .split(/[,，\s]+/)
     .map((t) => t.trim())
     .filter(Boolean)
-    .slice(0, 3),
+  return [...new Set(structured.length ? structured : fromSnapshot)].slice(0, 3)
+})
+
+const categoryColor = computed(
+  () => categoryStore.categories.find((c) => c.id === props.entry.categoryId)?.color ?? null,
 )
 
 function askDelete() {

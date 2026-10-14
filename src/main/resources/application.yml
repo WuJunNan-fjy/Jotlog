@@ -123,6 +123,17 @@ jotlog:
       access-key-secret: ${JOTLOG_OSS_ACCESS_KEY_SECRET:}
       bucket-name: ${JOTLOG_OSS_BUCKET_NAME:}
 
+  # ---------- AI 增强（DeepSeek，OpenAI 兼容协议）----------
+  # 没配 key 保持 enabled=false：worker 不启动，条目停在 pending，设置页提示"未配置"。
+  ai:
+    enabled: ${JOTLOG_AI_ENABLED:false}
+    base-url: ${JOTLOG_AI_BASE_URL:https://api.deepseek.com}
+    api-key: ${JOTLOG_AI_KEY:}
+    model: ${JOTLOG_AI_MODEL:deepseek-chat}
+    # 纯文本随记是否也调 AI 总结分类。网页端开关会写入 user_settings 覆盖此默认值。
+    polish-notes: ${JOTLOG_AI_POLISH_NOTES:false}
+    fetch-timeout-seconds: 8
+
 management:
   endpoints:
     web:

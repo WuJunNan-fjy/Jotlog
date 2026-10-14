@@ -113,6 +113,109 @@
         <p v-else-if="emailNotice" class="mt-2 text-[13px] text-accent">{{ emailNotice }}</p>
       </section>
 
+      <!-- AI 整理 -->
+      <section class="card p-5">
+        <h2 class="t-rule mb-4">AI 整理</h2>
+
+        <!-- 服务状态：三态讲清楚"现在到底能不能用" -->
+        <div class="flex items-center justify-between gap-3 text-[13px]">
+          <span class="text-ink-3">服务状态</span>
+          <span class="flex items-center gap-1.5 text-ink-2">
+            <span
+              class="h-[6px] w-[6px] rounded-full"
+              :class="ai?.ready ? 'bg-accent' : ai?.enabled ? 'bg-danger' : 'bg-ink-4'"
+            />
+            {{ aiStatusText }}
+          </span>
+        </div>
+        <p class="mt-1.5 text-[12px] leading-relaxed text-ink-3">
+          模型与 Key 只走服务器配置文件和环境变量（JOTLOG_AI_KEY），页面不会显示也不会保存 Key。
+        </p>
+
+        <!-- 纯文本笔记是否参与整理 -->
+        <label
+          class="mt-4 flex cursor-pointer items-start justify-between gap-3 rounded-lg border border-line-soft px-3 py-2.5"
+        >
+          <span>
+            <span class="block text-[13px] text-ink-2">纯文本笔记也交给 AI 整理</span>
+            <span class="mt-0.5 block text-[12px] leading-relaxed text-ink-3">
+              关着时，不带链接的随手记直接归入「灵感随记」，不花模型调用
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            class="mt-1 h-4 w-4 shrink-0 accent-ink"
+            :checked="!!ai?.polishNotes"
+            :disabled="!ai?.ready || noteSaving"
+            @change="togglePolishNotes(($event.target as HTMLInputElement).checked)"
+          />
+        </label>
+
+        <!-- 初始分类引导 -->
+        <div class="border-line-soft mt-4 border-t pt-4">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-[13px] text-ink-2">初始分类</p>
+            <button
+              class="btn btn-quiet px-2.5 py-1 text-[12.5px]"
+              :disabled="bootstrapLoading"
+              @click="runBootstrap"
+            >
+              <Icon name="sparkles" :size="13" />
+              {{ bootstrapLoading ? '生成中…' : '让 AI 推荐一套' }}
+            </button>
+          </div>
+          <p class="mt-1 text-[12px] leading-relaxed text-ink-3">
+            只是一份建议清单，勾哪些由你定，确认后才会创建；已存在的不会重复。
+          </p>
+          <div v-if="bootstrapCandidates.length" class="mt-2.5 space-y-1.5">
+            <label
+              v-for="name in bootstrapCandidates"
+              :key="name"
+              class="flex items-center gap-2 text-[13px] text-ink-2"
+            >
+              <input v-model="bootstrapPicked" type="checkbox" :value="name" class="h-4 w-4 accent-ink" />
+              {{ name }}
+            </label>
+            <button
+              class="btn btn-ghost mt-1 px-2.5 py-1 text-[12.5px]"
+              :disabled="!bootstrapPicked.length || bulkSaving"
+              @click="confirmCategories"
+            >
+              {{ bulkSaving ? '创建中…' : `创建所选（${bootstrapPicked.length}）` }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 批量补跑历史内容 -->
+        <div class="border-line-soft mt-4 border-t pt-4">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-[13px] text-ink-2">
+              批量补跑<span v-if="statsStore.data" class="text-ink-3"> · 待整理 {{ statsStore.data.pendingAi }} 条</span>
+            </p>
+            <button
+              v-if="!ai?.batch?.active"
+              class="btn btn-quiet px-2.5 py-1 text-[12.5px]"
+              :disabled="!ai?.ready || batchStarting"
+              @click="batchStart"
+            >
+              <Icon name="refresh" :size="13" />
+              {{ batchStarting ? '启动中…' : '开始补跑' }}
+            </button>
+            <button v-else class="btn btn-quiet px-2.5 py-1 text-[12.5px] text-danger" @click="batchStop">
+              停止
+            </button>
+          </div>
+          <p v-if="ai?.batch?.active" class="mt-1.5 text-[12px] text-ink-3">
+            正在排队补跑{{
+              ai.batch.total ? `（${Math.min(ai.batch.enqueued ?? 0, ai.batch.total)} / ${ai.batch.total}）` : '…'
+            }}
+          </p>
+          <p v-else class="mt-1 text-[12px] leading-relaxed text-ink-3">
+            按顺序把「待整理」的旧内容重新过一遍 AI，中途可以随时停止。
+          </p>
+        </div>
+      </section>
+
       <!-- 数据 -->
       <section class="card p-5">
         <h2 class="t-rule mb-1">数据</h2>
@@ -176,19 +279,146 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ApiError, downloadExport } from '../api/http'
+import { api, ApiError, downloadExport } from '../api/http'
 import { useAuthStore } from '../stores/auth'
+import { useCategoryStore } from '../stores/categories'
+import { useStatsStore } from '../stores/stats'
 import { useTheme } from '../composables/useTheme'
 import type { ThemeMode } from '../composables/useTheme'
 import { useToast } from '../composables/useToast'
+import type { AiStatusInfo } from '../types'
 import Icon from '../components/Icon.vue'
 
 const auth = useAuthStore()
 const { mode, set } = useTheme()
 const toast = useToast()
 const router = useRouter()
+const categoryStore = useCategoryStore()
+const statsStore = useStatsStore()
+
+/* ---------- AI 整理 ---------- */
+
+const ai = ref<AiStatusInfo | null>(null)
+const noteSaving = ref(false)
+
+const aiStatusText = computed(() => {
+  if (!ai.value) return '加载中…'
+  if (!ai.value.enabled) return '未启用（改配置文件开启）'
+  if (!ai.value.configured) return '已启用，缺 Key'
+  if (!ai.value.ready) return '模型不可用'
+  return `已接入 · ${ai.value.model}`
+})
+
+async function refreshAi() {
+  try {
+    ai.value = await api.aiStatus()
+  } catch {
+    // 状态拉不到不阻塞设置页其他功能
+  }
+}
+
+async function togglePolishNotes(next: boolean) {
+  noteSaving.value = true
+  try {
+    const res = await api.updateAiSettings(next)
+    if (ai.value) ai.value = { ...ai.value, polishNotes: res.polishNotes }
+    toast.push(next ? '纯文本笔记也会参与整理' : '纯文本笔记不再调 AI', 'success')
+  } catch (e) {
+    toast.push(e instanceof ApiError ? e.message : '设置没保存成', 'danger')
+  } finally {
+    noteSaving.value = false
+  }
+}
+
+const bootstrapCandidates = ref<string[]>([])
+const bootstrapPicked = ref<string[]>([])
+const bootstrapLoading = ref(false)
+const bulkSaving = ref(false)
+
+async function runBootstrap() {
+  bootstrapLoading.value = true
+  try {
+    const res = await api.bootstrapCategories()
+    bootstrapCandidates.value = res.suggestions
+    bootstrapPicked.value = [...res.suggestions]
+  } catch (e) {
+    toast.push(e instanceof ApiError ? e.message : '建议没生成出来', 'danger')
+  } finally {
+    bootstrapLoading.value = false
+  }
+}
+
+async function confirmCategories() {
+  if (!bootstrapPicked.value.length) return
+  bulkSaving.value = true
+  try {
+    await api.bulkCategories(bootstrapPicked.value)
+    await categoryStore.load(true)
+    toast.push('分类已创建', 'success')
+    bootstrapCandidates.value = []
+    bootstrapPicked.value = []
+  } catch (e) {
+    toast.push(e instanceof ApiError ? e.message : '创建失败', 'danger')
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
+const batchStarting = ref(false)
+let batchTimer: ReturnType<typeof setInterval> | null = null
+
+function stopBatchPolling() {
+  if (batchTimer) {
+    clearInterval(batchTimer)
+    batchTimer = null
+  }
+}
+
+function startBatchPolling() {
+  stopBatchPolling()
+  batchTimer = setInterval(async () => {
+    await refreshAi()
+    if (!ai.value?.batch?.active) {
+      stopBatchPolling()
+      statsStore.load().catch(() => {})
+    }
+  }, 2000)
+}
+
+async function batchStart() {
+  batchStarting.value = true
+  try {
+    const res = await api.batchRepolish('start')
+    if (ai.value) ai.value = { ...ai.value, batch: { active: res.active, total: res.total, enqueued: res.enqueued } }
+    startBatchPolling()
+    toast.push('批量补跑已开始', 'success')
+  } catch (e) {
+    toast.push(e instanceof ApiError ? e.message : '没有启动起来', 'danger')
+  } finally {
+    batchStarting.value = false
+  }
+}
+
+async function batchStop() {
+  try {
+    await api.batchRepolish('stop')
+    stopBatchPolling()
+    await refreshAi()
+    statsStore.load().catch(() => {})
+    toast.push('已停止补跑', 'success')
+  } catch (e) {
+    toast.push(e instanceof ApiError ? e.message : '停止失败', 'danger')
+  }
+}
+
+onMounted(() => {
+  refreshAi()
+  statsStore.load().catch(() => {})
+})
+
+onUnmounted(stopBatchPolling)
 
 const oldPassword = ref('')
 const newPassword = ref('')

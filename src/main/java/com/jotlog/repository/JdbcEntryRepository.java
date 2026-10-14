@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Repository
 public class JdbcEntryRepository implements EntryRepository {
@@ -23,6 +24,8 @@ public class JdbcEntryRepository implements EntryRepository {
             e.id, e.source, e.entry_type, e.raw_input, e.url, e.domain,
             e.title, e.ai_summary, e.ai_tags, e.ai_status, e.created_at,
             e.starred, e.archived,
+            e.category_id, e.suggested_category,
+            (SELECT c.name FROM categories c WHERE c.id = e.category_id) AS category_name,
             (SELECT a.sha256 FROM attachments a
               WHERE a.entry_id = e.id AND a.mime LIKE 'image/%'
               ORDER BY a.id LIMIT 1)                          AS image_sha,
@@ -61,18 +64,26 @@ public class JdbcEntryRepository implements EntryRepository {
 
     @Override
     public List<Row> recent(int limit) {
-        return searchPage(null, null, null, false, limit, 0).items();
+        return searchPage(null, null, null, false, null, null, false, limit, 0).items();
     }
 
     @Override
     public Row findById(long id) {
         List<Row> rows = jdbc.query("SELECT " + COLUMNS + " FROM entries e WHERE e.id = ?", ROW, id);
-        return rows.isEmpty() ? null : rows.get(0);
+        if (rows.isEmpty()) {
+            return null;
+        }
+        Row r = rows.get(0);
+        jdbc.query("""
+                SELECT t.name FROM entry_tags et JOIN tags t ON t.id = et.tag_id
+                WHERE et.entry_id = ? ORDER BY et.tag_id ASC
+                """, (rs, i) -> r.tags().add(rs.getString("name")), id);
+        return r;
     }
 
     @Override
     public List<Row> search(String keyword, int limit) {
-        return searchPage(keyword, null, null, false, limit, 0).items();
+        return searchPage(keyword, null, null, false, null, null, false, limit, 0).items();
     }
 
     /**
@@ -85,12 +96,14 @@ public class JdbcEntryRepository implements EntryRepository {
      */
     @Override
     public Page searchPage(String keyword, String type, Boolean starred, boolean includeArchived,
+                           Long categoryId, String tag, boolean uncategorized,
                            int limit, long offset) {
         String kw = keyword == null ? "" : keyword.trim();
         String mode = kw.isEmpty() ? "none" : (kw.length() < 2 ? "like" : "match");
 
-        List<Row> items = query(mode, kw, type, starred, includeArchived, limit, offset);
-        long total = count(mode, kw, type, starred, includeArchived);
+        List<Row> items = query(mode, kw, type, starred, includeArchived, categoryId, tag,
+                uncategorized, limit, offset);
+        long total = count(mode, kw, type, starred, includeArchived, categoryId, tag, uncategorized);
 
         // 兜底：全文索引查不到时用 LIKE 再查一遍。
         //
@@ -100,28 +113,53 @@ public class JdbcEntryRepository implements EntryRepository {
         // 解法是 SET GLOBAL innodb_ft_enable_stopword=0（见 scripts/init-db.sql），
         // 但那是全局变量，MySQL 重启就失效。兜底保证即使配置丢了也只是变慢，不会搜不到。
         if (items.isEmpty() && "match".equals(mode)) {
-            items = query("like", kw, type, starred, includeArchived, limit, offset);
-            total = count("like", kw, type, starred, includeArchived);
+            items = query("like", kw, type, starred, includeArchived, categoryId, tag,
+                    uncategorized, limit, offset);
+            total = count("like", kw, type, starred, includeArchived, categoryId, tag, uncategorized);
+        }
+
+        // 批量填充标签名，避免逐条 N+1。ROW mapper 给的是空可变 list，这里就地补。
+        if (!items.isEmpty()) {
+            List<Long> ids = items.stream().map(Row::id).toList();
+            String placeholders = String.join(",", ids.stream().map(x -> "?").toList());
+            Map<Long, Row> byId = items.stream()
+                    .collect(java.util.stream.Collectors.toMap(Row::id, r -> r));
+            jdbc.query("""
+                    SELECT et.entry_id AS eid, t.name AS name
+                    FROM entry_tags et JOIN tags t ON t.id = et.tag_id
+                    WHERE et.entry_id IN (%s)
+                    ORDER BY et.tag_id ASC
+                    """.formatted(placeholders),
+                    rs -> {
+                        Row r = byId.get(rs.getLong("eid"));
+                        if (r != null) {
+                            r.tags().add(rs.getString("name"));
+                        }
+                        return null;
+                    },
+                    ids.toArray());
         }
 
         return new Page(items, total);
     }
 
     private List<Row> query(String mode, String kw, String type, Boolean starred,
-                            boolean archived, int limit, long offset) {
+                            boolean archived, Long categoryId, String tag, boolean uncategorized,
+                            int limit, long offset) {
         StringBuilder sql = new StringBuilder("SELECT ").append(COLUMNS).append(" FROM entries e WHERE ");
         List<Object> params = new ArrayList<>();
-        conditions(sql, params, mode, kw, type, starred, archived);
+        conditions(sql, params, mode, kw, type, starred, archived, categoryId, tag, uncategorized);
         sql.append(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
         params.add(limit);
         params.add(offset);
         return jdbc.query(sql.toString(), ROW, params.toArray());
     }
 
-    private long count(String mode, String kw, String type, Boolean starred, boolean archived) {
-        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM entries WHERE ");
+    private long count(String mode, String kw, String type, Boolean starred, boolean archived,
+                       Long categoryId, String tag, boolean uncategorized) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM entries e WHERE ");
         List<Object> params = new ArrayList<>();
-        conditions(sql, params, mode, kw, type, starred, archived);
+        conditions(sql, params, mode, kw, type, starred, archived, categoryId, tag, uncategorized);
         Long n = jdbc.queryForObject(sql.toString(), Long.class, params.toArray());
         return n == null ? 0 : n;
     }
@@ -140,7 +178,8 @@ public class JdbcEntryRepository implements EntryRepository {
      *   对随手记这种「命中即有用」的场景，排序价值远低于「不能漏」。
      */
     private static void conditions(StringBuilder sql, List<Object> params, String mode, String kw,
-                                   String type, Boolean starred, boolean archived) {
+                                   String type, Boolean starred, boolean archived,
+                                   Long categoryId, String tag, boolean uncategorized) {
         sql.append("archived = ?");
         params.add(archived ? 1 : 0);
 
@@ -162,6 +201,19 @@ public class JdbcEntryRepository implements EntryRepository {
         if (starred != null) {
             sql.append(" AND starred = ?");
             params.add(starred ? 1 : 0);
+        }
+        if (categoryId != null) {
+            sql.append(" AND category_id = ?");
+            params.add(categoryId);
+        }
+        if (uncategorized) {
+            sql.append(" AND category_id IS NULL");
+        }
+        if (tag != null && !tag.isBlank()) {
+            // 主表别名固定为 e（query/count 都用 FROM entries e），这里才能引用 e.id
+            sql.append(" AND EXISTS (SELECT 1 FROM entry_tags et2 JOIN tags t2 ON t2.id = et2.tag_id")
+               .append(" WHERE et2.entry_id = e.id AND t2.name = ?)");
+            params.add(tag.trim());
         }
     }
 
@@ -278,16 +330,25 @@ public class JdbcEntryRepository implements EntryRepository {
      * AI 结果回写。
      *
      * SQL 里刻意不出现 raw_input。润色只能补充，不能覆盖。
+     * 分类 id 与"建议新分类名"一并落：AI 不能自建分类，建议名等用户在页面采纳。
      */
     @Override
-    public void applyAiResult(long id, String title, String summary, String tags, String model, int latencyMs) {
+    public void applyAiResult(long id, String title, String summary, String tagsSnapshot,
+                              Long categoryId, String suggestedCategory, String model, int latencyMs) {
         jdbc.update("""
                 UPDATE entries
                 SET title = ?, ai_summary = ?, ai_tags = ?,
+                    category_id = ?, suggested_category = ?,
                     ai_model = ?, ai_latency_ms = ?,
                     ai_status = 'done', ai_error = NULL
                 WHERE id = ?
-                """, title, summary, tags, model, latencyMs, id);
+                """, title, summary, tagsSnapshot, categoryId, suggestedCategory,
+                model, latencyMs, id);
+    }
+
+    @Override
+    public void markAiProcessing(long id) {
+        jdbc.update("UPDATE entries SET ai_status = 'processing' WHERE id = ?", id);
     }
 
     @Override
@@ -300,15 +361,42 @@ public class JdbcEntryRepository implements EntryRepository {
     }
 
     @Override
-    public List<Long> pendingForPolish(int limit) {
+    public void skipWithCategory(long id, Long categoryId) {
+        jdbc.update("""
+                UPDATE entries
+                SET ai_status = 'skipped', ai_error = NULL, category_id = ?
+                WHERE id = ?
+                """, categoryId, id);
+    }
+
+    @Override
+    public void setCategory(long id, Long categoryId) {
+        jdbc.update("""
+                UPDATE entries
+                SET category_id = ?, suggested_category = NULL
+                WHERE id = ?
+                """, categoryId, id);
+    }
+
+    @Override
+    public List<Long> pendingForPolish(int limit, boolean includeNotes) {
+        String types = includeNotes
+                ? "('link', 'repo', 'video', 'note')"
+                : "('link', 'repo', 'video')";
         return jdbc.query("""
                 SELECT id FROM entries
-                WHERE ai_status = 'pending'
-                  AND entry_type IN ('link', 'repo', 'video')
+                WHERE ai_status IN ('pending', 'failed')
+                  AND entry_type IN %s
                   AND created_at < NOW(3) - INTERVAL 5 SECOND
                 ORDER BY created_at ASC
                 LIMIT ?
-                """, (rs, i) -> rs.getLong("id"), limit);
+                """.formatted(types), (rs, i) -> rs.getLong("id"), limit);
+    }
+
+    @Override
+    public List<String> sampleRawInput(int limit) {
+        return jdbc.query("SELECT raw_input FROM entries ORDER BY created_at DESC LIMIT ?",
+                (rs, i) -> rs.getString("raw_input"), limit);
     }
 
     private static final RowMapper<Row> ROW = (ResultSet rs, int i) -> new Row(
@@ -328,5 +416,9 @@ public class JdbcEntryRepository implements EntryRepository {
             rs.getBoolean("starred"),
             rs.getBoolean("archived"),
             rs.getString("image_sha"),
-            rs.getLong("attachment_count"));
+            rs.getLong("attachment_count"),
+            rs.getObject("category_id", Long.class),
+            rs.getString("category_name"),
+            rs.getString("suggested_category"),
+            new ArrayList<>());
 }

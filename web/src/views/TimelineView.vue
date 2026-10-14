@@ -20,9 +20,7 @@
     <!-- 桌面常驻输入框；手机上靠右下角悬浮按钮，这里放会占掉首屏一大块 -->
     <ComposeBox v-if="mode === 'all' && !isCompact" @created="reload" />
 
-    <h2 v-if="mode !== 'all'" class="t-rule mb-3">
-      {{ mode === 'starred' ? '星标' : '归档' }}
-    </h2>
+    <h2 v-if="mode !== 'all'" class="t-rule mb-3">{{ heading }}</h2>
 
     <p v-if="error" class="rounded-lg bg-danger-soft px-3.5 py-2.5 text-[13px] text-danger">
       {{ error }}
@@ -61,6 +59,7 @@
           @toggle-star="ops.toggleStar(entry)"
           @toggle-archive="ops.toggleArchive(entry)"
           @delete="ops.remove(entry)"
+          @repolish="handleRepolish(entry)"
         />
       </section>
 
@@ -84,6 +83,7 @@ import { useEntryOps } from '../composables/useEntryOps'
 import { useHotkeys } from '../composables/useHotkeys'
 import { useStatsStore } from '../stores/stats'
 import { useUiStore } from '../stores/ui'
+import { useCategoryStore } from '../stores/categories'
 import ComposeBox from '../components/ComposeBox.vue'
 import EntryCard from '../components/EntryCard.vue'
 import Masthead from '../components/Masthead.vue'
@@ -91,14 +91,20 @@ import EmptyState from '../components/EmptyState.vue'
 import SkeletonList from '../components/SkeletonList.vue'
 import Icon from '../components/Icon.vue'
 
-const props = withDefaults(defineProps<{ mode?: 'all' | 'starred' | 'archive' }>(), {
-  mode: 'all',
-})
+const props = withDefaults(
+  defineProps<{
+    mode?: 'all' | 'starred' | 'archive' | 'category' | 'tag' | 'uncategorized'
+    categoryId?: number
+    tag?: string
+  }>(),
+  { mode: 'all' },
+)
 
 const SIZE = 30
 
 const ui = useUiStore()
 const stats = useStatsStore()
+const categoryStore = useCategoryStore()
 const ops = useEntryOps()
 const { isCompact } = useBreakpoint()
 
@@ -114,6 +120,24 @@ let observer: IntersectionObserver | null = null
 const hasMore = computed(() => total.value < 0 || items.value.length < total.value)
 
 const todayLabel = computed(() => dayLabel(todayIso()))
+
+/** 非时间线页的刊头标题 */
+const heading = computed(() => {
+  switch (props.mode) {
+    case 'starred':
+      return '星标'
+    case 'archive':
+      return '归档'
+    case 'uncategorized':
+      return '待分类'
+    case 'tag':
+      return `# ${props.tag ?? ''}`
+    case 'category':
+      return categoryStore.categories.find((c) => c.id === props.categoryId)?.name ?? '分类'
+    default:
+      return ''
+  }
+})
 
 /** 按日期分组。随手记是按时间回溯的，没有日期分隔就是一锅粥。 */
 const groups = computed(() => {
@@ -134,12 +158,16 @@ const groups = computed(() => {
 const emptyTitle = computed(() => {
   if (props.mode === 'starred') return '还没有加星标的内容'
   if (props.mode === 'archive') return '归档箱是空的'
+  if (props.mode === 'uncategorized') return '没有待分类的内容'
+  if (props.mode === 'category' || props.mode === 'tag') return '这里还没有内容'
   return '还没有记录'
 })
 
 const emptyHint = computed(() => {
   if (props.mode === 'starred') return '在时间线里点条目右边的小星星，就会收到这里'
   if (props.mode === 'archive') return '归档不会删除内容，只是让它从时间线上消失'
+  if (props.mode === 'uncategorized') return '新内容经过 AI 整理后会自动归入分类'
+  if (props.mode === 'category' || props.mode === 'tag') return '可以在条目详情里手动调整分类或标签'
   return '在上面写一条，或者去飞书里发给你的机器人'
 })
 
@@ -157,6 +185,9 @@ async function fetchNextPage() {
     const result = await api.entries({
       starred: props.mode === 'starred' ? true : undefined,
       archived: props.mode === 'archive',
+      categoryId: props.mode === 'category' ? props.categoryId : undefined,
+      tag: props.mode === 'tag' ? props.tag : undefined,
+      uncategorized: props.mode === 'uncategorized',
       page: page.value,
       size: SIZE,
     })
@@ -176,6 +207,16 @@ async function reload() {
   page.value = 0
   await fetchNextPage()
   stats.load()
+}
+
+/** 卡片上"整理失败，点此重试"：重新入队，本地立刻切到"整理中"态 */
+async function handleRepolish(entry: Entry) {
+  try {
+    await api.repolish(entry.id)
+    entry.aiStatus = 'pending'
+  } catch {
+    // 列表页静默处理：详情面板里有带错误信息的完整重试入口
+  }
 }
 
 // 详情面板（挂在 AppShell 上）改了条目，这里要跟着改列表
@@ -210,9 +251,9 @@ watch(
   () => reload(),
 )
 
-// 切页（时间线 ↔ 星标 ↔ 归档）时组件会复用，必须重新拉数据
+// 切视图（时间线 ↔ 星标 ↔ 分类/标签/待分类）或路由参数变化时组件被复用，必须重新拉数据
 watch(
-  () => props.mode,
+  () => [props.mode, props.categoryId, props.tag],
   () => reload(),
 )
 

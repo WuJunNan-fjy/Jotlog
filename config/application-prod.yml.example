@@ -87,6 +87,16 @@ jotlog:
       access-key-secret: YOUR_OSS_ACCESS_KEY_SECRET
       bucket-name: YOUR_OSS_BUCKET_NAME
 
+  # ---------- AI 增强（DeepSeek）----------
+  # 推荐生产用环境变量 JOTLOG_AI_KEY 注入，不把 key 写进配置文件。
+  # 不配就保持 enabled:false，整个 AI 链路不启动，不影响记录功能。
+  ai:
+    enabled: false
+    base-url: https://api.deepseek.com
+    api-key: ""
+    model: deepseek-chat
+    polish-notes: false
+
 # ============================================================================
 # 附：环境变量注入（scripts/jotlog.service 用的就是这种，密钥不进配置文件）
 #
@@ -101,6 +111,11 @@ jotlog:
 #   JOTLOG_DEV_CODE_TO_LOG            生产必须 false
 #   JOTLOG_ATTACHMENT_DIR             附件目录，仅 local 存储
 #   FEISHU_APP_ID / FEISHU_APP_SECRET 飞书凭证
+#   JOTLOG_AI_ENABLED                 是否启用 AI 增强，默认 false
+#   JOTLOG_AI_BASE_URL                OpenAI 兼容端点，默认 https://api.deepseek.com
+#   JOTLOG_AI_KEY                     DeepSeek API key
+#   JOTLOG_AI_MODEL                   模型名，默认 deepseek-chat
+#   JOTLOG_AI_POLISH_NOTES            纯文本随记是否也 AI 总结，默认 false
 #
 # 生成 JWT 密钥：
 #   openssl rand -base64 48

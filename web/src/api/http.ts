@@ -1,4 +1,13 @@
-import type { AttachmentMeta, Entry, Page, Stats, User } from '../types'
+import type {
+  AiStatusInfo,
+  AttachmentMeta,
+  Category,
+  Entry,
+  EntryLink,
+  Page,
+  Stats,
+  User,
+} from '../types'
 
 const TOKEN_KEY = 'jotlog.token'
 
@@ -109,6 +118,9 @@ export const api = {
     type?: string
     starred?: boolean
     archived?: boolean
+    categoryId?: number
+    tag?: string
+    uncategorized?: boolean
     page?: number
     size?: number
   }) => request<Page>('/api/entries', { params }),
@@ -131,6 +143,58 @@ export const api = {
     request<{ ok: boolean }>(`/api/entries/${id}`, { method: 'PATCH', body: patch }),
 
   deleteEntry: (id: number) => request<{ ok: boolean }>(`/api/entries/${id}`, { method: 'DELETE' }),
+
+  // ---------- 分类 / 标签 / AI 整理 ----------
+
+  setEntryCategory: (id: number, categoryId: number | null, acceptSuggestion = false) =>
+    request<{ ok: boolean; categoryId: number | null }>(`/api/entries/${id}/category`, {
+      method: 'PUT',
+      body: { categoryId, acceptSuggestion },
+    }),
+
+  setEntryTags: (id: number, tags: string[]) =>
+    request<{ ok: boolean; tags: string[] }>(`/api/entries/${id}/tags`, {
+      method: 'PUT',
+      body: { tags },
+    }),
+
+  repolish: (id: number) =>
+    request<{ ok: boolean }>(`/api/entries/${id}/repolish`, { method: 'POST' }),
+
+  entryLinks: (id: number) => request<EntryLink[]>(`/api/entries/${id}/links`),
+
+  categories: () =>
+    request<{ categories: Category[]; uncategorized: number }>('/api/categories'),
+
+  createCategory: (name: string, color?: string | null) =>
+    request<{ id: number }>('/api/categories', {
+      method: 'POST',
+      body: { name, color: color ?? null },
+    }),
+
+  bulkCategories: (names: string[]) =>
+    request<{ created: number }>('/api/categories/bulk', { method: 'POST', body: { names } }),
+
+  tagsSuggest: (q?: string) => request<string[]>('/api/tags', { params: { q } }),
+
+  aiStatus: () => request<AiStatusInfo>('/api/ai/status'),
+
+  updateAiSettings: (polishNotes: boolean) =>
+    request<{ ok: boolean; polishNotes: boolean }>('/api/ai/settings', {
+      method: 'PUT',
+      body: { polishNotes },
+    }),
+
+  bootstrapCategories: () =>
+    request<{ suggestions: string[]; existing: string[] }>('/api/ai/bootstrap-categories', {
+      method: 'POST',
+    }),
+
+  batchRepolish: (action: 'start' | 'stop') =>
+    request<{ active: boolean; total: number; enqueued: number }>('/api/ai/batch-repolish', {
+      method: 'POST',
+      body: { action },
+    }),
 
   stats: () => request<Stats>('/api/stats'),
 

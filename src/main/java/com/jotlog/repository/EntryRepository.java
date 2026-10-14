@@ -25,27 +25,45 @@ public interface EntryRepository {
     /** 标题搜索。1 字查询由上层降级到 LIKE，这里只处理 >= 2 字。 */
     List<Row> search(String keyword, int limit);
 
-    /** 写入 AI 补充区。这是唯一允许改写已有条目的路径。 */
-    void applyAiResult(long id, String title, String summary, String tags, String model, int latencyMs);
+    /**
+     * 写入 AI 补充区。这是唯一允许改写已有条目补充字段的路径，
+     * SQL 里不出现 raw_input。分类与标签建议由上层在同事务内另行写关联表。
+     */
+    void applyAiResult(long id, String title, String summary, String tagsSnapshot,
+                       Long categoryId, String suggestedCategory, String model, int latencyMs);
 
-    /** 记录 AI 失败原因，条目本身保持已入库状态。 */
+    void markAiProcessing(long id);
+
     void markAiFailed(long id, String error);
 
-    /** 待润色队列：状态为 pending 且超过指定时间。 */
-    List<Long> pendingForPolish(int limit);
+    /** note 跳过 AI 时按规则归入指定分类（可为 null）。 */
+    void skipWithCategory(long id, Long categoryId);
+
+    /** 待润色队列：pending/failed 且超过指定时间；includeNotes 决定是否含纯文本随记。 */
+    List<Long> pendingForPolish(int limit, boolean includeNotes);
+
+    /** 冷启动引导抽样：只取原文，按时间倒序。 */
+    List<String> sampleRawInput(int limit);
+
+    /** 手动设置/清除分类；清除或改选时同时清空 AI 新分类建议。 */
+    void setCategory(long id, Long categoryId);
 
     /**
      * 分页查询。 keyword 为空时就是"按时间倒序翻页"。
      *
      * @param includeArchived true 时只看归档箱，false 时只看正常条目
+     * @param categoryId      非空时只看该分类
+     * @param tag             非空时只看带该标签的条目
+     * @param uncategorized   true 时只看 category_id 为空的条目
      */
     Page searchPage(String keyword, String type, Boolean starred, boolean includeArchived,
+                    Long categoryId, String tag, boolean uncategorized,
                     int limit, long offset);
 
     /** 改星标 / 归档 / 备注。三个都传 null 表示什么都不改。 */
     void updateFlags(long id, Boolean starred, Boolean archived, String note);
 
-    /** 物理删除。附件走外键级联。 */
+    /** 物理删除。附件与标签关联走外键级联。 */
     void deleteById(long id);
 
     /** 首页顶部那几个数字。 */
@@ -83,6 +101,9 @@ public interface EntryRepository {
      * imageSha / attachmentCount 是关联子查询聚合出来的附件摘要：
      * 列表页靠它们决定要不要给缩略图和附件标记，不用逐条再查。
      * imageSha 为 null 表示这条没有图片附件。
+     *
+     * tags 是可变 List：Jdbc 层查出页数据后二次批量填充标签名，
+     * 避免在 RowMapper 里做 N+1。
      */
     record Row(
             long id,
@@ -99,7 +120,11 @@ public interface EntryRepository {
             boolean starred,
             boolean archived,
             String imageSha,
-            long attachmentCount
+            long attachmentCount,
+            Long categoryId,
+            String categoryName,
+            String suggestedCategory,
+            List<String> tags
     ) {
     }
 
